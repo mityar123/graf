@@ -118,7 +118,7 @@ class GraphArea(QtWidgets.QWidget):
             yt = int(self.height() * point.kh) + self.offset_y
             x = int(self.width() * kw) + self.offset_x
             y = int(self.height() * kh) + self.offset_y
-            if ((x - xt) ** 2 + (y - yt) ** 2) ** 0.5 <= point.size + self.point_size + 5:
+            if ((x - xt) ** 2 + (y - yt) ** 2) ** 0.5 <= point.size + self.point_size + 3:
                 return False
         return True
 
@@ -292,7 +292,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.custom_color_button)
 
         self.color_btn = QtWidgets.QPushButton()
-        self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 15px; width: 30px; height: 30px;")
+        self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 10px; width: 20px; height: 20px;")
+        self.color_btn.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.color_btn)
 
         # Ползунок для размера точки
@@ -422,10 +423,13 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         if color.isValid():
             self.color = color.name()
             self.graph_area.point_color = hex_to_QColor(self.color)
-            self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 15px; width: 30px; height: 30px;")
+            self.color_btn.setStyleSheet(
+                f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size)}px; width: {2 * self.graph_area.point_size}px; height: {2 * self.graph_area.point_size}px;")
 
     def change_size(self):
         self.graph_area.point_size = self.size_slider.value()  # Меняем размер точки в рабочей области
+        self.color_btn.setStyleSheet(
+            f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size)}px; width: {2 * self.graph_area.point_size}px; height: {2 * self.graph_area.point_size}px;")
 
     def enter_erase_mode(self):
         self.graph_area.set_erase_mode(True)  # Вход в режим удаления
