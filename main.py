@@ -10,6 +10,18 @@ for monitor in get_monitors():
     monitor_height = int(monitor.height)
 
 
+def QColor_to_hex(qcolor):
+    return '#{:02X}{:02X}{:02X}'.format(qcolor.red(), qcolor.green(), qcolor.blue())
+
+
+def hex_to_QColor(hex_color):
+    hex_color = hex_color.lstrip('#')  # Удаляем символ <code>#</code> в начале
+    r = int(hex_color[0:2], 16)  # Красный
+    g = int(hex_color[2:4], 16)  # Зеленый
+    b = int(hex_color[4:6], 16)  # Синий
+    return QtGui.QColor(r, g, b)
+
+
 class Settings(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
@@ -65,10 +77,11 @@ class About_program(QtWidgets.QWidget):
 
 
 class Point:
-    def __init__(self, kw, kh, size):
+    def __init__(self, kw, kh, size, color=QtGui.QColor(255, 0, 0)):
         self.kw = kw
         self.kh = kh
         self.size = size
+        self.color = color
 
 
 class GraphArea(QtWidgets.QWidget):
@@ -82,6 +95,7 @@ class GraphArea(QtWidgets.QWidget):
         self.offset_x = 0
         self.offset_y = 0
         self.point_size = 10
+        self.point_color = QtGui.QColor(0, 0, 0)
         self.temp1 = None
         self.temp2 = None
 
@@ -110,14 +124,31 @@ class GraphArea(QtWidgets.QWidget):
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        painter.drawRect(0, 0, self.width() - 1, self.height() - 1)  # Используем текущие размеры
+        painter.drawRect(0, 0, self.width() - 1, self.height() - 1)  # Рамка виджета
+
+        # Рисуем сетку
+        grid_color = QtGui.QColor(200, 200, 200)  # Цвет сетки
+        painter.setPen(grid_color)
+
+        grid_spacing = 20  # Расстояние между линиями
+
+        # Вертикальные линии с учетом смещения
+        for x in range(self.offset_x % grid_spacing, self.width() + grid_spacing, grid_spacing):
+            painter.drawLine(x, 0, x, self.height())
+
+        # Горизонтальные линии с учетом смещения
+        for y in range(self.offset_y % grid_spacing, self.height() + grid_spacing, grid_spacing):
+            painter.drawLine(0, y, self.width(), y)
 
         # Рисуем точки
-        painter.setBrush(QtGui.QBrush(QtCore.Qt.red))
         for point in self.points:
-            painter.drawEllipse(int(self.width() * point.kw) + self.offset_x - point.size,
-                                int(self.height() * point.kh) + self.offset_y - point.size, point.size * 2,
-                                point.size * 2)  # Рисуем круг вокруг точки
+            painter.setBrush(QtGui.QBrush(point.color))  # Используем цвет точки
+            painter.drawEllipse(
+                int(self.width() * point.kw) + self.offset_x - point.size,
+                int(self.height() * point.kh) + self.offset_y - point.size,
+                point.size * 2,
+                point.size * 2
+            )  # Рисуем круг вокруг точки
 
     def mouseMoveEvent(self, event):
         if event.buttons() == QtCore.Qt.RightButton and self.temp1 is not None:
@@ -144,8 +175,12 @@ class GraphArea(QtWidgets.QWidget):
             kw = (event.x() - self.offset_x) / self.width()
             kh = (event.y() - self.offset_y) / self.height()
             if self.can_add_point(kw, kh):
-                self.points.append(Point(kw, kh, self.point_size))
+                self.points.append(Point(kw, kh, self.point_size, self.point_color))
                 self.update()  # Обновляем область для перерисовки
+
+    def wheelEvent(self, evnt):
+        if evnt.modifiers() == QtCore.Qt.ControlModifier:
+            print(evnt.angleDelta().y())
 
 
 class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
@@ -153,6 +188,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         super().__init__()
         self.setWindowTitle("Graf++")
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
+        self.color = "#000000"
         self.graph_area = None
         self.setupUi()
 
@@ -165,76 +201,120 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         vertical_layout = QtWidgets.QVBoxLayout(central_widget)
         gorizontal_layout = QtWidgets.QHBoxLayout(central_widget)
 
-        # Создаём панель инструментов
+        # Создаем панель инструментов
         self.tool_panel = QtWidgets.QFrame()
+        self.tool_panel.setStyleSheet("""
+        QFrame
+        {
+            background - color:  # FFFFFF; /* Цвет фона панели */
+                border: 1
+        px
+        solid  # BDBDBD; /* Рамка */
+        border - radius: 15
+        px; / *Закругленные
+        углы * /
+        padding: 10
+        px; / *Отступы
+        внутри
+        панели * /
+        box - shadow: 2
+        px
+        2
+        px
+        10
+        px
+        rgba(0, 0, 0, 0.2); / *Тень
+        панели * /
+        }
+        QPushButton
+        {
+            background - color:  # F0F0F0; /* Цвет фона кнопок */
+                border: none; / *Без
+        рамки * /
+        border - radius: 10
+        px; / *Закругленные
+        углы
+        кнопок * /
+        padding: 10
+        px; / *Отступы
+        внутри
+        кнопки * /
+        margin: 5
+        px; / *Отступ
+        между
+        кнопками * /
+        font - size: 14
+        px; / *Размер
+        шрифта
+        кнопок * /
+        }
+        QPushButton: hover
+        {
+            background - color:  # 007BFF; /* Цвет фона при наведении */
+                color: white; / *Цвет
+        текста
+        при
+        наведении * /
+        }
+        QPushButton: pressed
+        {
+            background - color:  # 0056b3; /* Цвет фона при нажатии */
+        }
+        QSlider
+        {
+            background - color:  # F0F0F0; /* Цвет фона слайдера */
+                border - radius: 5
+        px; / *Закругленные
+        углы * /
+
+        }
+        QSlider::handle: horizontal
+        {
+            background:  # 007BFF; /* Цвет ползунка */
+                width: 10
+        px; / *Ширина
+        ползунка * /
+        border - radius: 5
+        px; / *Закругленные
+        углы
+        ползунка * /
+        }
+        """)
         self.tool_panel_layout = QtWidgets.QHBoxLayout(self.tool_panel)
 
-        # Создание радиокнопок для выбора размера точки
-        self.size_user = QtWidgets.QRadioButton("Пользовательский (10)")
-        self.size_small = QtWidgets.QRadioButton("Маленький")
-        self.size_medium = QtWidgets.QRadioButton("Средний")
-        self.size_large = QtWidgets.QRadioButton("Большой")
+        # Кнопка "Инструменты"
+        self.tools_button = QtWidgets.QPushButton("Инструменты")
+        self.tool_panel_layout.addWidget(self.tools_button)
 
-        # Устанавливаем начальное состояние (например, средний размер по умолчанию)
-        self.size_medium.setChecked(True)
+        # Выбор пользовательского цвета
+        self.custom_color_button = QtWidgets.QPushButton("Выбрать цвет")
+        self.custom_color_button.clicked.connect(self.choose_custom_color)
+        self.tool_panel_layout.addWidget(self.custom_color_button)
 
-        # Применение стиля к радиокнопкам
-        self.size_user.setStyleSheet("""
-            QRadioButton {
-                padding: 10px; /* Отступы для радиокнопок */
-                background-color: #F0F0F0; /* Цвет фона кнопки */
-                border: 1px solid #007BFF; /* Цвет рамки */
-                border-radius: 5px; /* Закругление углов */
-            }
-            QRadioButton:checked {
-                background-color: #007BFF; /* Цвет фона при выборе */
-                color: white; /* Цвет текста при выборе */
-            }
-            QRadioButton:hover {
-                background-color: #E0E0E0; /* Цвет фона при наведении */
-            }
-        """)
+        self.color_btn = QtWidgets.QPushButton()
+        self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 15px; width: 30px; height: 30px;")
+        self.tool_panel_layout.addWidget(self.color_btn)
 
-        self.size_small.setStyleSheet(self.size_user.styleSheet())  # Применяем тот же стиль
-        self.size_medium.setStyleSheet(self.size_user.styleSheet())  # Применяем тот же стиль
-        self.size_large.setStyleSheet(self.size_user.styleSheet())  # Применяем тот же стиль
+        # Ползунок для размера точки
+        self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.size_slider.setMinimum(5)
+        self.size_slider.setMaximum(30)
+        self.size_slider.setValue(10)
+        self.size_slider.valueChanged.connect(self.change_size)
+        self.tool_panel_layout.addWidget(self.size_slider)
 
-        # Подключаем сигнал изменения состояния кнопок
-        self.size_user.toggled.connect(self.change_point_size_user)
-        self.size_small.toggled.connect(self.change_point_size1)
-        self.size_medium.toggled.connect(self.change_point_size2)
-        self.size_large.toggled.connect(self.change_point_size3)
+        # Кнопка удаления (корзинка)
+        self.erase_button = QtWidgets.QPushButton("Удалить")
+        self.erase_button.clicked.connect(self.enter_erase_mode)
+        self.tool_panel_layout.addWidget(self.erase_button)
 
-        # Добавляем радиокнопки в панель инструментов
-        self.tool_panel_layout.addWidget(self.size_user)
-        self.tool_panel_layout.addWidget(self.size_small)
-        self.tool_panel_layout.addWidget(self.size_medium)
-        self.tool_panel_layout.addWidget(self.size_large)
+        # Кнопка выбора фона
+        self.background_button = QtWidgets.QPushButton("Выбрать фон")
+        self.background_button.clicked.connect(self.choose_background)
+        self.tool_panel_layout.addWidget(self.background_button)
 
-        # Создаем ползунок
-        self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.slider.setMinimum(1)
-        self.slider.setMaximum(30)
-        self.slider.setValue(10)  # Значение по умолчанию
-        self.slider.setVisible(False)  # Скрываем ползунок по умолчанию
-        self.slider.setFixedHeight(20)
-        self.slider.setFixedWidth(
-            int(self.size_user.sizeHint().width() * 2) - int(self.size_user.sizeHint().width() * 2) % 29)
-
-        self.slider.sliderMoved.connect(self.change_point_size_user)
-
-        self.timer = QtCore.QTimer()
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.hide_slider)
-
-        self.size_user.enterEvent = self.show_slider
-        self.size_user.leaveEvent = self.on_leave
-        self.slider.enterEvent = self.show_slider
-        self.slider.leaveEvent = self.on_leave
-
-        # Добавляем ползунок в layout
+        # Добавляем панель инструментов в layout
         vertical_layout.addWidget(self.tool_panel)
-        vertical_layout.addWidget(self.slider)
 
         # Создание боковой панели
         self.side_panel = QtWidgets.QFrame()
@@ -264,7 +344,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         vertical_layout.addLayout(gorizontal_layout)
 
         vertical_layout.setStretch(0, 0)
-        vertical_layout.setStretch(1, 0)  # H
+        vertical_layout.setStretch(1, 1)  # H
         vertical_layout.setStretch(2, 1)
 
         # Создание меню
@@ -332,29 +412,28 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.wnd_about = About_program()  # Создаем экземпляр About_program
         self.wnd_about.show()  # Используем show() для открытия окна
 
-    def change_point_size1(self):
-        self.graph_area.point_size = 5
-
-    def change_point_size2(self):
-        self.graph_area.point_size = 10
-
-    def change_point_size3(self):
-        self.graph_area.point_size = 15
-
-    def show_slider(self, event):
-        self.slider.setVisible(True)
-        self.timer.stop()
-
-    def hide_slider(self):
-        self.slider.setVisible(False)
-
-    def on_leave(self, event):
-        self.timer.start(1000)  # Запускаем таймер на 1 секунду
-
     def change_point_size_user(self):
         self.size_user.setText(f"Пользовательский ({self.slider.value()})")
         if self.size_user.isChecked():
             self.graph_area.point_size = int(self.slider.value())
+
+    def choose_custom_color(self):
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            self.color = color.name()
+            self.graph_area.point_color = hex_to_QColor(self.color)
+            self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 15px; width: 30px; height: 30px;")
+
+    def change_size(self):
+        self.graph_area.point_size = self.size_slider.value()  # Меняем размер точки в рабочей области
+
+    def enter_erase_mode(self):
+        self.graph_area.set_erase_mode(True)  # Вход в режим удаления
+
+    def choose_background(self):
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            self.graph_area.set_background_color(color.name())  # Устанавливаем цвет фона
 
 
 if __name__ == '__main__':
