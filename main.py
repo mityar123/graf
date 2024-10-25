@@ -94,7 +94,7 @@ class GraphArea(QtWidgets.QWidget):
         self.points = []  # Список для хранения точек
         self.offset_x = 0
         self.offset_y = 0
-        self.point_size = 10
+        self.point_size = 12
         self.point_color = QtGui.QColor(0, 0, 0)
         self.temp1 = None
         self.temp2 = None
@@ -204,80 +204,36 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Создаем панель инструментов
         self.tool_panel = QtWidgets.QFrame()
         self.tool_panel.setStyleSheet("""
-        QFrame
-        {
-            background - color:  # FFFFFF; /* Цвет фона панели */
-                border: 1
-        px
-        solid  # BDBDBD; /* Рамка */
-        border - radius: 15
-        px; / *Закругленные
-        углы * /
-        padding: 10
-        px; / *Отступы
-        внутри
-        панели * /
-        box - shadow: 2
-        px
-        2
-        px
-        10
-        px
-        rgba(0, 0, 0, 0.2); / *Тень
-        панели * /
+        QFrame{
+            background-color:  #FFFFFF; /* Цвет фона панели */
+            border: 1px solid  #BDBDBD; /* Рамка */
+            border-radius: 15px; /* Закругленные углы */
+            padding: 10px; /* Отступы внутри панели */
+            rgba(0, 0, 0, 0.2); /* Тенб панели */
         }
-        QPushButton
-        {
-            background - color:  # F0F0F0; /* Цвет фона кнопок */
-                border: none; / *Без
-        рамки * /
-        border - radius: 10
-        px; / *Закругленные
-        углы
-        кнопок * /
-        padding: 10
-        px; / *Отступы
-        внутри
-        кнопки * /
-        margin: 5
-        px; / *Отступ
-        между
-        кнопками * /
-        font - size: 14
-        px; / *Размер
-        шрифта
-        кнопок * /
+        QPushButton{
+            background-color:  #F0F0F0; /* Цвет фона кнопок */
+            border: none; /* Без рамки */
+            border-radius: 10px; /* Закругленные углы кнопок */
+            padding: 10px; /* Отступы внутри кнопки */
+            margin: 5px; /* Отступ между кнопками */
+            font-size: 14px; /* Размер шрифта кнопок */
         }
-        QPushButton: hover
-        {
-            background - color:  # 007BFF; /* Цвет фона при наведении */
-                color: white; / *Цвет
-        текста
-        при
-        наведении * /
+        QPushButton: hover{
+            background-color:  #007BFF; /* Цвет фона при наведении */
+            color: white; /* Цвет текста при наведении */
         }
-        QPushButton: pressed
-        {
-            background - color:  # 0056b3; /* Цвет фона при нажатии */
+        QPushButton: pressed{
+            background-color:  #0056b3; /* Цвет фона при нажатии */
         }
-        QSlider
-        {
-            background - color:  # F0F0F0; /* Цвет фона слайдера */
-                border - radius: 5
-        px; / *Закругленные
-        углы * /
-
+        QSlider{
+            background-color:  #F0F0F0; /* Цвет фона слайдера */
+            border-radius: 5px; /* Закругленныеуглы */
         }
-        QSlider::handle: horizontal
-        {
-            background:  # 007BFF; /* Цвет ползунка */
-                width: 10
-        px; / *Ширина
-        ползунка * /
-        border - radius: 5
-        px; / *Закругленные
-        углы
-        ползунка * /
+        QSlider::handle: horizontal{
+            background:  #007BFF; /* Цвет ползунка */
+            width: 10px; /* Ширина ползунка */
+            border-radius: 5px; /* Закругленные углы ползунка */
         }
         """)
         self.tool_panel_layout = QtWidgets.QHBoxLayout(self.tool_panel)
@@ -292,15 +248,15 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.custom_color_button)
 
         self.color_btn = QtWidgets.QPushButton()
-        self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 10px; width: 20px; height: 20px;")
+        self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 6px; width: 12px; height: 12px;")
         self.color_btn.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.color_btn)
 
         # Ползунок для размера точки
         self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.size_slider.setMinimum(5)
-        self.size_slider.setMaximum(30)
-        self.size_slider.setValue(10)
+        self.size_slider.setMinimum(30)
+        self.size_slider.setMaximum(110)
+        self.size_slider.setValue(60)
         self.size_slider.valueChanged.connect(self.change_size)
         self.tool_panel_layout.addWidget(self.size_slider)
 
@@ -413,10 +369,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.wnd_about = About_program()  # Создаем экземпляр About_program
         self.wnd_about.show()  # Используем show() для открытия окна
 
-    def change_point_size_user(self):
-        self.size_user.setText(f"Пользовательский ({self.slider.value()})")
-        if self.size_user.isChecked():
-            self.graph_area.point_size = int(self.slider.value())
 
     def choose_custom_color(self):
         color = QtWidgets.QColorDialog.getColor()
@@ -427,9 +379,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size)}px; width: {2 * self.graph_area.point_size}px; height: {2 * self.graph_area.point_size}px;")
 
     def change_size(self):
-        self.graph_area.point_size = self.size_slider.value()  # Меняем размер точки в рабочей области
+        self.graph_area.point_size = self.size_slider.value() / 10 + 6  # Меняем размер точки в рабочей области
         self.color_btn.setStyleSheet(
-            f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size)}px; width: {2 * self.graph_area.point_size}px; height: {2 * self.graph_area.point_size}px;")
+            f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 6}px; width: {2 * self.graph_area.point_size - 12}px; height: {2 * self.graph_area.point_size - 12}px;")
 
     def enter_erase_mode(self):
         self.graph_area.set_erase_mode(True)  # Вход в режим удаления
