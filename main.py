@@ -1,9 +1,10 @@
 import time
+import sys
 
 from screeninfo import get_monitors
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-import sys
+# import absresgetter
+from pyqt_svg_button.svgButton import SvgButton
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -91,10 +92,11 @@ class GraphArea(QtWidgets.QWidget):
         self.my_height = self.height()
         self.setStyleSheet("background-color: #32CD32;")
         self.reset_graph()
+        self.grid = 1  # надо ли отрисовывать сетку
         self.points = []  # Список для хранения точек
         self.offset_x = 0
         self.offset_y = 0
-        self.point_size = 12
+        self.point_size = 9
         self.point_color = QtGui.QColor(0, 0, 0)
         self.temp1 = None
         self.temp2 = None
@@ -126,19 +128,20 @@ class GraphArea(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.drawRect(0, 0, self.width() - 1, self.height() - 1)  # Рамка виджета
 
-        # Рисуем сетку
-        grid_color = QtGui.QColor(200, 200, 200)  # Цвет сетки
-        painter.setPen(grid_color)
+        if self.grid:
+            # Рисуем сетку
+            grid_color = QtGui.QColor(200, 200, 200)  # Цвет сетки
+            painter.setPen(grid_color)
 
-        grid_spacing = 20  # Расстояние между линиями
+            grid_spacing = 20  # Расстояние между линиями
 
-        # Вертикальные линии с учетом смещения
-        for x in range(self.offset_x % grid_spacing, self.width() + grid_spacing, grid_spacing):
-            painter.drawLine(x, 0, x, self.height())
+            # Вертикальные линии с учетом смещения
+            for x in range(self.offset_x % grid_spacing, self.width() + grid_spacing, grid_spacing):
+                painter.drawLine(x, 0, x, self.height())
 
-        # Горизонтальные линии с учетом смещения
-        for y in range(self.offset_y % grid_spacing, self.height() + grid_spacing, grid_spacing):
-            painter.drawLine(0, y, self.width(), y)
+            # Горизонтальные линии с учетом смещения
+            for y in range(self.offset_y % grid_spacing, self.height() + grid_spacing, grid_spacing):
+                painter.drawLine(0, y, self.width(), y)
 
         # Рисуем точки
         for point in self.points:
@@ -238,35 +241,48 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         """)
         self.tool_panel_layout = QtWidgets.QHBoxLayout(self.tool_panel)
 
+        self.tool_panel_layout.setContentsMargins(5, 0, 5, 0)
+        self.tool_panel_layout.setSpacing(0)
+
         # Кнопка "Инструменты"
-        self.tools_button = QtWidgets.QPushButton("Инструменты")
+        self.tools_button = SvgButton()
+        self.tools_button.setIcon("tools-solid.svg")
+        self.tools_button.setFixedWidth(int(monitor_width * 0.03))
         self.tool_panel_layout.addWidget(self.tools_button)
 
         # Выбор пользовательского цвета
-        self.custom_color_button = QtWidgets.QPushButton("Выбрать цвет")
+        self.custom_color_button = SvgButton()
+        self.custom_color_button.setIcon("palette-solid.svg")
+        self.custom_color_button.setFixedWidth(int(monitor_width * 0.03))
         self.custom_color_button.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.custom_color_button)
 
         self.color_btn = QtWidgets.QPushButton()
+        self.color_btn.setFixedWidth(12)
         self.color_btn.setStyleSheet(f"background-color: {self.color}; border-radius: 6px; width: 12px; height: 12px;")
         self.color_btn.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.color_btn)
 
         # Ползунок для размера точки
         self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.size_slider.setMinimum(30)
-        self.size_slider.setMaximum(110)
-        self.size_slider.setValue(60)
+        self.size_slider.setMinimum(3)
+        self.size_slider.setMaximum(11)
+        self.size_slider.setValue(6)
+        self.size_slider.setFixedWidth(int(monitor_width * 0.06))
         self.size_slider.valueChanged.connect(self.change_size)
         self.tool_panel_layout.addWidget(self.size_slider)
 
         # Кнопка удаления (корзинка)
-        self.erase_button = QtWidgets.QPushButton("Удалить")
+        self.erase_button = SvgButton()
+        self.erase_button.setIcon("trash-alt-solid.svg")
+        self.erase_button.setFixedWidth(int(monitor_width * 0.03))
         self.erase_button.clicked.connect(self.enter_erase_mode)
         self.tool_panel_layout.addWidget(self.erase_button)
 
         # Кнопка выбора фона
-        self.background_button = QtWidgets.QPushButton("Выбрать фон")
+        self.background_button = SvgButton()
+        self.background_button.setIcon("border-all-solid.svg")
+        self.background_button.setFixedWidth(int(monitor_width * 0.03))
         self.background_button.clicked.connect(self.choose_background)
         self.tool_panel_layout.addWidget(self.background_button)
 
@@ -369,27 +385,26 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.wnd_about = About_program()  # Создаем экземпляр About_program
         self.wnd_about.show()  # Используем show() для открытия окна
 
-
     def choose_custom_color(self):
         color = QtWidgets.QColorDialog.getColor()
         if color.isValid():
             self.color = color.name()
             self.graph_area.point_color = hex_to_QColor(self.color)
             self.color_btn.setStyleSheet(
-                f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size)}px; width: {2 * self.graph_area.point_size}px; height: {2 * self.graph_area.point_size}px;")
+                f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
     def change_size(self):
-        self.graph_area.point_size = self.size_slider.value() / 10 + 6  # Меняем размер точки в рабочей области
+        self.graph_area.point_size = self.size_slider.value() + 3  # Меняем размер точки в рабочей области
+        self.color_btn.setFixedWidth(2 * self.graph_area.point_size - 6)
         self.color_btn.setStyleSheet(
-            f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 6}px; width: {2 * self.graph_area.point_size - 12}px; height: {2 * self.graph_area.point_size - 12}px;")
+            f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
     def enter_erase_mode(self):
         self.graph_area.set_erase_mode(True)  # Вход в режим удаления
 
     def choose_background(self):
-        color = QtWidgets.QColorDialog.getColor()
-        if color.isValid():
-            self.graph_area.set_background_color(color.name())  # Устанавливаем цвет фона
+        self.graph_area.grid ^= 1
+        self.graph_area.update()
 
 
 if __name__ == '__main__':
