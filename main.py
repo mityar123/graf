@@ -92,7 +92,12 @@ class GraphArea(QtWidgets.QWidget):
         self.my_height = self.height()
         self.setStyleSheet("background-color: #32CD32;")
         self.reset_graph()
+
         self.grid = 1  # надо ли отрисовывать сетку
+        self.move_mode = 1
+        self.paint_mode = 0
+        self.delete_mode = 0
+
         self.points = []  # Список для хранения точек
         self.offset_x = 0
         self.offset_y = 0
@@ -154,7 +159,8 @@ class GraphArea(QtWidgets.QWidget):
             )  # Рисуем круг вокруг точки
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == QtCore.Qt.RightButton and self.temp1 is not None:
+        if (event.buttons() == QtCore.Qt.RightButton and self.temp1 is not None) or (
+                event.buttons() == QtCore.Qt.LeftButton and self.temp1 is not None and self.move_mode):
             # Вычисляем новое смещение
             dx = event.pos().x() - self.temp1.x()
             dy = event.pos().y() - self.temp1.y()
@@ -171,6 +177,16 @@ class GraphArea(QtWidgets.QWidget):
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.RightButton:
             self.temp1 = event.pos()  # Сохраняем текущую позицию мыши
+        elif event.button() == QtCore.Qt.LeftButton:
+            if self.move_mode:
+                self.temp1 = event.pos()
+            elif self.paint_mode:
+                # Вычисляем координаты с учетом текущего смещения
+                kw = (event.x() - self.offset_x) / self.width()
+                kh = (event.y() - self.offset_y) / self.height()
+                if self.can_add_point(kw, kh):
+                    self.points.append(Point(kw, kh, self.point_size, self.point_color))
+                    self.update()  # Обновляем область для перерисовки
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
@@ -250,6 +266,24 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tools_button.setFixedWidth(int(monitor_width * 0.03))
         self.tool_panel_layout.addWidget(self.tools_button)
 
+        # Кнопка рисования (кисточка)
+        self.paint_button = SvgButton()
+        self.paint_button.setIcon("paint-brush-solid.svg")
+        self.paint_button.setFixedWidth(int(monitor_width * 0.03))
+        self.paint_button.setCheckable(True)
+        self.paint_button.clicked.connect(self.switch_paint_mode)
+        self.paint_button.clicked.connect(self.switch_move_mode)
+        self.tool_panel_layout.addWidget(self.paint_button)
+
+        # Кнопка удаления (корзинка)
+        self.erase_button = SvgButton()
+        self.erase_button.setIcon("trash-alt-solid.svg")
+        self.erase_button.setFixedWidth(int(monitor_width * 0.03))
+        self.erase_button.setCheckable(True)
+        self.erase_button.clicked.connect(self.switch_erase_mode)
+        self.erase_button.clicked.connect(self.switch_move_mode)
+        self.tool_panel_layout.addWidget(self.erase_button)
+
         # Выбор пользовательского цвета
         self.custom_color_button = SvgButton()
         self.custom_color_button.setIcon("palette-solid.svg")
@@ -271,13 +305,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.size_slider.setFixedWidth(int(monitor_width * 0.06))
         self.size_slider.valueChanged.connect(self.change_size)
         self.tool_panel_layout.addWidget(self.size_slider)
-
-        # Кнопка удаления (корзинка)
-        self.erase_button = SvgButton()
-        self.erase_button.setIcon("trash-alt-solid.svg")
-        self.erase_button.setFixedWidth(int(monitor_width * 0.03))
-        self.erase_button.clicked.connect(self.enter_erase_mode)
-        self.tool_panel_layout.addWidget(self.erase_button)
 
         # Кнопка выбора фона
         self.background_button = SvgButton()
@@ -399,8 +426,25 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.color_btn.setStyleSheet(
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
-    def enter_erase_mode(self):
-        self.graph_area.set_erase_mode(True)  # Вход в режим удаления
+    def switch_paint_mode(self):
+        if self.erase_button.isChecked():
+            self.erase_button.setChecked(False)
+        self.graph_area.move_mode = 0
+        self.graph_area.paint_mode = 1
+        self.graph_area.delete_mode = 0
+
+    def switch_erase_mode(self):
+        if self.paint_button.isChecked():
+            self.paint_button.setChecked(False)
+        self.graph_area.move_mode = 0
+        self.graph_area.paint_mode = 0
+        self.graph_area.delete_mode = 1
+
+    def switch_move_mode(self):
+        if not (self.erase_button.isChecked() or self.paint_button.isChecked()):
+            self.graph_area.move_mode = 1
+            self.graph_area.paint_mode = 0
+            self.graph_area.delete_mode = 0
 
     def choose_background(self):
         self.graph_area.grid ^= 1
