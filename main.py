@@ -2,9 +2,9 @@ import time
 import sys
 
 from screeninfo import get_monitors
-from PyQt5 import QtCore, QtGui, QtWidgets
-# import absresgetter
-from pyqt_svg_button.svgButton import SvgButton
+
+from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -16,10 +16,10 @@ def QColor_to_hex(qcolor):
 
 
 def hex_to_QColor(hex_color):
-    hex_color = hex_color.lstrip('#')  # Удаляем символ <code>#</code> в начале
-    r = int(hex_color[0:2], 16)  # Красный
-    g = int(hex_color[2:4], 16)  # Зеленый
-    b = int(hex_color[4:6], 16)  # Синий
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
     return QtGui.QColor(r, g, b)
 
 
@@ -77,129 +77,143 @@ class About_program(QtWidgets.QWidget):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
-class Point:
-    def __init__(self, kw, kh, size, color=QtGui.QColor(255, 0, 0)):
-        self.kw = kw
-        self.kh = kh
-        self.size = size
-        self.color = color
+class GraphArea(QGraphicsView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
+        # Создаем сцену с очень большим sceneRect
+        self.scene = QGraphicsScene(self)
+        infinite_size = 10 ** 6  # Задаем большой размер
+        self.scene.setSceneRect(-infinite_size, -infinite_size, 2 * infinite_size, 2 * infinite_size)
+        self.setScene(self.scene)
+        self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
-class GraphArea(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.my_width = self.width()
-        self.my_height = self.height()
-        self.setStyleSheet("background-color: #32CD32;")
-        self.reset_graph()
+        # Убираем ползунки для рабочей области
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        self.grid = 1  # надо ли отрисовывать сетку
-        self.move_mode = 1
-        self.paint_mode = 0
-        self.delete_mode = 0
+        # Параметры для точек (вершин графа)
+        self.point_size = 10
+        self.point_color = QtGui.QColor("#000000")
 
-        self.points = []  # Список для хранения точек
-        self.offset_x = 0
-        self.offset_y = 0
-        self.point_size = 9
-        self.point_color = QtGui.QColor(0, 0, 0)
-        self.temp1 = None
-        self.temp2 = None
+        self.start_point = None
 
-    def resizeEvent(self, event):
-        # Обновляем ширину и высоту на основе текущих размеров виджета
-        self.my_width = self.width()
-        self.my_height = self.height()
-        self.update()  # Обновляем область после изменения размеров
-        super().resizeEvent(event)
+        # шаг увеличения
+        self.scale_factor = 1.1
+        # Стандартное увеличени
+        self.scale(2, 2)
 
-    def reset_graph(self):
-        """Метод для сброса графа."""
-        self.points = []  # Очистка данных графа
-        self.update()  # Обновление области рисования
+        # СПРОСИТЬ КАК ОТРИСОВЫВАТЬ СЕТКУ
+        # Параметры сетки
+        self.grid_enabled = True  # Флаг для включения сетки
+        self.grid_size = 5  # Размер одной ячейки сетки
+        self.grid_color = QtGui.QColor(200, 200, 200, 125)  # Цвет сетки (с четвёртым паказателем для прозрачности)
 
-    def can_add_point(self, kw, kh):
-        """Проверяет, можно ли добавить точку в указанное место."""
-        for point in self.points:
-            xt = int(self.width() * point.kw) + self.offset_x
-            yt = int(self.height() * point.kh) + self.offset_y
-            x = int(self.width() * kw) + self.offset_x
-            y = int(self.height() * kh) + self.offset_y
-            if ((x - xt) ** 2 + (y - yt) ** 2) ** 0.5 <= point.size + self.point_size + 3:
-                return False
-        return True
+        # Режимы взаимодействия
+        self.move_mode = True
+        self.paint_mode = False
+        self.delete_mode = False
 
-    def paintEvent(self, event):
-        painter = QtGui.QPainter(self)
-        painter.drawRect(0, 0, self.width() - 1, self.height() - 1)  # Рамка виджета
-
-        if self.grid:
-            # Рисуем сетку
-            grid_color = QtGui.QColor(200, 200, 200)  # Цвет сетки
-            painter.setPen(grid_color)
-
-            grid_spacing = 20  # Расстояние между линиями
-
-            # Вертикальные линии с учетом смещения
-            for x in range(self.offset_x % grid_spacing, self.width() + grid_spacing, grid_spacing):
-                painter.drawLine(x, 0, x, self.height())
-
-            # Горизонтальные линии с учетом смещения
-            for y in range(self.offset_y % grid_spacing, self.height() + grid_spacing, grid_spacing):
-                painter.drawLine(0, y, self.width(), y)
-
-        # Рисуем точки
-        for point in self.points:
-            painter.setBrush(QtGui.QBrush(point.color))  # Используем цвет точки
-            painter.drawEllipse(
-                int(self.width() * point.kw) + self.offset_x - point.size,
-                int(self.height() * point.kh) + self.offset_y - point.size,
-                point.size * 2,
-                point.size * 2
-            )  # Рисуем круг вокруг точки
-
-    def mouseMoveEvent(self, event):
-        if (event.buttons() == QtCore.Qt.RightButton and self.temp1 is not None) or (
-                event.buttons() == QtCore.Qt.LeftButton and self.temp1 is not None and self.move_mode):
-            # Вычисляем новое смещение
-            dx = event.pos().x() - self.temp1.x()
-            dy = event.pos().y() - self.temp1.y()
-
-            # Применяем смещение
-            self.offset_x += dx
-            self.offset_y += dy
-
-            # Сохраняем текущее положение мыши для следующих вычислений
-            self.temp1 = event.pos()
-
-            self.update()  # Обновление области
+    def wheelEvent(self, event):
+        """Обработка колесика мыши для масштабирования сцены."""
+        if event.angleDelta().y() > 0:
+            self.scale(self.scale_factor, self.scale_factor)  # Увеличение
+        else:
+            self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
 
     def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.RightButton:
-            self.temp1 = event.pos()  # Сохраняем текущую позицию мыши
-        elif event.button() == QtCore.Qt.LeftButton:
-            if self.move_mode:
-                self.temp1 = event.pos()
-            elif self.paint_mode:
-                # Вычисляем координаты с учетом текущего смещения
-                kw = (event.x() - self.offset_x) / self.width()
-                kh = (event.y() - self.offset_y) / self.height()
-                if self.can_add_point(kw, kh):
-                    self.points.append(Point(kw, kh, self.point_size, self.point_color))
-                    self.update()  # Обновляем область для перерисовки
+        """Обработка нажатия мыши для добавления, удаления или выбора точек."""
+        pos = self.mapToScene(event.position().toPoint())
 
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            # Вычисляем координаты с учетом текущего смещения
-            kw = (event.x() - self.offset_x) / self.width()
-            kh = (event.y() - self.offset_y) / self.height()
-            if self.can_add_point(kw, kh):
-                self.points.append(Point(kw, kh, self.point_size, self.point_color))
-                self.update()  # Обновляем область для перерисовки
+        if self.paint_mode:
+            if event.modifiers() == QtCore.Qt.KeyboardModifier.ShiftModifier and not self.start_point is None:
+                items = self.scene.items(pos)
+                for item in items:
+                    if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                        self.scene.addLine()
+            else:
+                # Добавление новой точки
+                self.add_point(pos)
+        elif self.delete_mode:
+            # Удаление точки при нажатии
+            self.delete_point(pos)
+        elif self.move_mode:
+            # Логика перемещения (можно доработать)
+            self.select_point(pos)
 
-    def wheelEvent(self, evnt):
-        if evnt.modifiers() == QtCore.Qt.ControlModifier:
-            print(evnt.angleDelta().y())
+        super().mousePressEvent(event)
+
+    def can_add_ellipse(self, new_ellipse):
+        # Получаем центр нового элипса в координатах сцены
+        new_center = new_ellipse.mapToScene(new_ellipse.rect().center())
+
+        # Проходим по всем объектам на сцене
+        for item in self.scene.items():
+            if isinstance(item, QGraphicsEllipseItem):
+                # Получаем центр существующего элипса в координатах сцены
+                existing_center = item.mapToScene(item.rect().center())
+
+                # Вычисляем расстояние между центрами
+                distance = (new_center - existing_center).manhattanLength()
+
+                # Проверка, что расстояние больше суммы радиусов и минимального расстояния
+                if distance < (new_ellipse.rect().width() / 2 + item.rect().width() / 2 + 3):
+                    return False
+
+        return True
+
+    def add_point(self, pos):
+        """Добавление новой точки (вершины) на сцену."""
+        point_item = QGraphicsEllipseItem(0, 0, self.point_size, self.point_size)
+        point_item.setBrush(QtGui.QBrush(self.point_color))
+
+        # Установка обводки
+        pen = QtGui.QPen(QtGui.QColor("#000000"))  # Черный цвет обводки
+        pen.setWidth(0)  # Устанавливаем толщину обводки в 1 пиксель
+        point_item.setPen(pen)
+
+        point_item.setPos(pos.x() - self.point_size / 2, pos.y() - self.point_size / 2)
+        point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)  # Включаем перемещение
+        point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)  # Включаем выбор
+        if self.can_add_ellipse(point_item):
+            self.scene.addItem(point_item)
+        else:
+            del point_item
+
+    def delete_point(self, pos):
+        """Удаление точки при нажатии на неё."""
+        items = self.scene.items(pos)
+        for item in items:
+            if isinstance(item, QGraphicsEllipseItem):
+                self.scene.removeItem(item)
+
+    def select_point(self, pos):
+        """Выбор точки для перемещения (или дополнительного взаимодействия)."""
+        items = self.scene.items(pos)
+        for item in items:
+            if isinstance(item, QGraphicsEllipseItem):
+                # Дополнительная логика для работы с выбранной точкой
+                item.setSelected(True)
+                self.start_point = item
+
+    def set_point_color(self, color):
+        """Изменение цвета точек (вершин)."""
+        self.point_color = color
+
+    def set_point_size(self, size):
+        """Изменение размера точек (вершин)."""
+        self.point_size = size
+
+    def reset_graph(self):
+        """Очистка сцены."""
+        self.scene.clear()
+
+
+class SvgButton(QtWidgets.QPushButton):
+    def __init__(self, icon_path):
+        super().__init__()
+        self.setIcon(QtGui.QIcon(icon_path))
 
 
 class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
@@ -261,14 +275,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.setSpacing(0)
 
         # Кнопка "Инструменты"
-        self.tools_button = SvgButton()
-        self.tools_button.setIcon("tools-solid.svg")
+        self.tools_button = SvgButton("tools-solid.svg")
         self.tools_button.setFixedWidth(int(monitor_width * 0.03))
         self.tool_panel_layout.addWidget(self.tools_button)
 
         # Кнопка рисования (кисточка)
-        self.paint_button = SvgButton()
-        self.paint_button.setIcon("paint-brush-solid.svg")
+        self.paint_button = SvgButton("paint-brush-solid.svg")
         self.paint_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_button.setCheckable(True)
         self.paint_button.clicked.connect(self.switch_paint_mode)
@@ -276,8 +288,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.paint_button)
 
         # Кнопка удаления (корзинка)
-        self.erase_button = SvgButton()
-        self.erase_button.setIcon("trash-alt-solid.svg")
+        self.erase_button = SvgButton("trash-alt-solid.svg")
         self.erase_button.setFixedWidth(int(monitor_width * 0.03))
         self.erase_button.setCheckable(True)
         self.erase_button.clicked.connect(self.switch_erase_mode)
@@ -285,8 +296,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.erase_button)
 
         # Выбор пользовательского цвета
-        self.custom_color_button = SvgButton()
-        self.custom_color_button.setIcon("palette-solid.svg")
+        self.custom_color_button = SvgButton("palette-solid.svg")
         self.custom_color_button.setFixedWidth(int(monitor_width * 0.03))
         self.custom_color_button.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.custom_color_button)
@@ -298,7 +308,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.color_btn)
 
         # Ползунок для размера точки
-        self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.size_slider.setMinimum(3)
         self.size_slider.setMaximum(11)
         self.size_slider.setValue(6)
@@ -307,8 +317,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.size_slider)
 
         # Кнопка выбора фона
-        self.background_button = SvgButton()
-        self.background_button.setIcon("border-all-solid.svg")
+        self.background_button = SvgButton("border-all-solid.svg")
         self.background_button.setFixedWidth(int(monitor_width * 0.03))
         self.background_button.clicked.connect(self.choose_background)
         self.tool_panel_layout.addWidget(self.background_button)
@@ -352,12 +361,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         file_menu = menu_bar.addMenu("Файл")
 
         # Создание кнопок в выпадающем меню
-        self.new_action = QtWidgets.QAction("New", self)
-        self.save_action = QtWidgets.QAction("Save", self)
-        self.load_action = QtWidgets.QAction("Load", self)
-        self.settings_action = QtWidgets.QAction("Settings", self)
-        self.about_action = QtWidgets.QAction("About program", self)
-        self.exit_action = QtWidgets.QAction("Exit", self)
+        self.new_action = QtGui.QAction("New", self)
+        self.save_action = QtGui.QAction("Save", self)
+        self.load_action = QtGui.QAction("Load", self)
+        self.settings_action = QtGui.QAction("Settings", self)
+        self.about_action = QtGui.QAction("About program", self)
+        self.exit_action = QtGui.QAction("Exit", self)
 
         # Подключение действий для кнопок
         self.new_action.triggered.connect(self.new_graf)
@@ -416,12 +425,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         color = QtWidgets.QColorDialog.getColor()
         if color.isValid():
             self.color = color.name()
-            self.graph_area.point_color = hex_to_QColor(self.color)
+            self.graph_area.set_point_color(hex_to_QColor(self.color))
             self.color_btn.setStyleSheet(
                 f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
     def change_size(self):
-        self.graph_area.point_size = self.size_slider.value() + 3  # Меняем размер точки в рабочей области
+        self.graph_area.set_point_size(self.size_slider.value() + 3)  # Меняем размер точки в рабочей области
         self.color_btn.setFixedWidth(2 * self.graph_area.point_size - 6)
         self.color_btn.setStyleSheet(
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
@@ -429,25 +438,35 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
     def switch_paint_mode(self):
         if self.erase_button.isChecked():
             self.erase_button.setChecked(False)
-        self.graph_area.move_mode = 0
-        self.graph_area.paint_mode = 1
-        self.graph_area.delete_mode = 0
+        self.graph_area.move_mode = False
+        self.graph_area.paint_mode = True
+        self.graph_area.delete_mode = False
+        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.graph_area.update()
 
     def switch_erase_mode(self):
         if self.paint_button.isChecked():
             self.paint_button.setChecked(False)
-        self.graph_area.move_mode = 0
-        self.graph_area.paint_mode = 0
-        self.graph_area.delete_mode = 1
+        self.graph_area.move_mode = False
+        self.graph_area.paint_mode = False
+        self.graph_area.delete_mode = True
+        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.graph_area.update()
 
     def switch_move_mode(self):
         if not (self.erase_button.isChecked() or self.paint_button.isChecked()):
-            self.graph_area.move_mode = 1
-            self.graph_area.paint_mode = 0
-            self.graph_area.delete_mode = 0
+            self.graph_area.move_mode = True
+            self.graph_area.paint_mode = False
+            self.graph_area.delete_mode = False
+            self.graph_area.setCursor(QtCore.Qt.CursorShape.BusyCursor)
+            self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            self.graph_area.update()
 
     def choose_background(self):
-        self.graph_area.grid ^= 1
+        """Переключение сетки на графе."""
+        self.graph_area.grid_enabled = not self.graph_area.grid_enabled
         self.graph_area.update()
 
 
