@@ -4,7 +4,7 @@ import sys
 from screeninfo import get_monitors
 
 from PyQt6 import QtWidgets, QtGui, QtCore
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -109,11 +109,16 @@ class GraphArea(QGraphicsView):
         self.grid_enabled = True  # Флаг для включения сетки
         self.grid_size = 5  # Размер одной ячейки сетки
         self.grid_color = QtGui.QColor(200, 200, 200, 125)  # Цвет сетки (с четвёртым паказателем для прозрачности)
+        self.draw_grid()
 
         # Режимы взаимодействия
         self.move_mode = True
-        self.paint_mode = False
+        self.paint_ellipse_mode = False
+        self.paint_line_mode = False
         self.delete_mode = False
+
+    def draw_grid(self):
+        pass
 
     def wheelEvent(self, event):
         """Обработка колесика мыши для масштабирования сцены."""
@@ -123,18 +128,21 @@ class GraphArea(QGraphicsView):
             self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
 
     def mousePressEvent(self, event):
+        fl = 1
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
         pos = self.mapToScene(event.position().toPoint())
 
-        if self.paint_mode:
-            if event.modifiers() == QtCore.Qt.KeyboardModifier.ShiftModifier and not self.start_point is None:
+        if self.paint_line_mode:
+                fl = 0
                 items = self.scene.items(pos)
                 for item in items:
                     if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                        self.scene.addLine()
-            else:
-                # Добавление новой точки
-                self.add_point(pos)
+                        self.add_line(self.start_point.mapToScene(self.start_point.rect().center()),
+                                      item.mapToScene(item.rect().center()))
+                        print(546546)
+        elif self.paint_ellipse_mode:
+            # Добавление новой точки
+            self.add_point(pos)
         elif self.delete_mode:
             # Удаление точки при нажатии
             self.delete_point(pos)
@@ -142,7 +150,11 @@ class GraphArea(QGraphicsView):
             # Логика перемещения (можно доработать)
             self.select_point(pos)
 
-        super().mousePressEvent(event)
+        if fl:
+            super().mousePressEvent(event)
+
+    def add_line(self, pos1, pos2):
+        pass
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
@@ -178,6 +190,7 @@ class GraphArea(QGraphicsView):
         point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)  # Включаем выбор
         if self.can_add_ellipse(point_item):
             self.scene.addItem(point_item)
+            self.start_point = point_item
         else:
             del point_item
 
@@ -286,6 +299,22 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_button.clicked.connect(self.switch_paint_mode)
         self.paint_button.clicked.connect(self.switch_move_mode)
         self.tool_panel_layout.addWidget(self.paint_button)
+
+        # Кнопка рисования кругов
+        self.paint_Ellipse_button = SvgButton("")
+        self.paint_Ellipse_button.setFixedWidth(int(monitor_width * 0.03))
+        self.paint_Ellipse_button.setCheckable(True)
+        self.paint_Ellipse_button.clicked.connect(self.switch_paint_mode)
+        self.paint_Ellipse_button.clicked.connect(self.switch_move_mode)
+        self.tool_panel_layout.addWidget(self.paint_Ellipse_button)
+
+        # Кнопка рисования линий
+        self.paint_Line_button = SvgButton("")
+        self.paint_Line_button.setFixedWidth(int(monitor_width * 0.03))
+        self.paint_Line_button.setCheckable(True)
+        self.paint_Line_button.clicked.connect(self.switch_paint_mode)
+        self.paint_Line_button.clicked.connect(self.switch_move_mode)
+        self.tool_panel_layout.addWidget(self.paint_Line_button)
 
         # Кнопка удаления (корзинка)
         self.erase_button = SvgButton("trash-alt-solid.svg")
@@ -435,7 +464,17 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.color_btn.setStyleSheet(
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
-    def switch_paint_mode(self):
+    def switch_paint_ellipse_mode(self):
+        if self.erase_button.isChecked():
+            self.erase_button.setChecked(False)
+        self.graph_area.move_mode = False
+        self.graph_area.paint_mode = True
+        self.graph_area.delete_mode = False
+        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.graph_area.update()
+
+    def switch_paint_line_mode(self):
         if self.erase_button.isChecked():
             self.erase_button.setChecked(False)
         self.graph_area.move_mode = False
