@@ -77,6 +77,58 @@ class About_program(QtWidgets.QWidget):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
+class LabeledEllipse(QGraphicsEllipseItem):
+    def __init__(self, x, y, size, color, label, parent=None):
+        super().__init__(-size / 2, -size / 2, size, size, parent)  # Центрируем вершину относительно (x, y)
+        self.setPos(x, y)
+
+        # Настройка внешнего вида вершины
+        self.setBrush(QtGui.QBrush(color))
+        self.setPen(QtGui.QPen(QtGui.QColor("#000000"), 0))  # Убираем обводку
+
+        # Создаём метку с номером
+        self.label = QtWidgets.QGraphicsTextItem(str(label), self)
+        self.label.setDefaultTextColor(QtGui.QColor("#000000"))  # Устанавливаем цвет по умолчанию
+        self.update_text_font(size)  # Настраиваем размер текста
+        self.update_text_position(size)  # Центрируем текст
+        self.update_text_color()  # Обновляем цвет текста в зависимости от цвета вершины
+
+        # Устанавливаем флаги для перемещения и выделения
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
+
+    def set_label(self, label):
+        """Изменить номер (метку)"""
+        self.label.setPlainText(str(label))
+        self.update_text_position(self.rect().width())  # Перерасчёт позиции текста
+        self.update_text_color()  # Перепроверка цвета текста
+
+    def update_text_font(self, size):
+        """Обновляем размер шрифта текста в зависимости от размера вершины"""
+        font_size = size * 0.8  # Размер текста 80% от размера вершины
+        font = self.label.font()
+        font.setPointSizeF(font_size)
+        self.label.setFont(font)
+
+    def update_text_position(self, size):
+        """Обновляем позицию текста, чтобы он оставался в центре вершины"""
+        text_rect = self.label.boundingRect()
+        self.label.setPos(-text_rect.width() / 2, -text_rect.height() / 2)
+
+    def update_text_color(self):
+        """Обновляем цвет текста в зависимости от фона вершины"""
+        color = self.brush().color()
+        brightness = color.red() * 0.299 + color.green() * 0.587 + color.blue() * 0.114
+        text_color = QtGui.QColor(255, 255, 255) if brightness < 128 else QtGui.QColor(0, 0, 0)
+        self.label.setDefaultTextColor(text_color)
+
+    def set_size(self, size):
+        """Обновление размера вершины и перенастройка текста"""
+        self.setRect(-size / 2, -size / 2, size, size)
+        self.update_text_font(size)
+        self.update_text_position(size)
+
+
 class GraphArea(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -96,6 +148,9 @@ class GraphArea(QGraphicsView):
         # Параметры для точек (вершин графа)
         self.point_size = 10
         self.point_color = QtGui.QColor("#000000")
+
+        # Список для хранения вершин и их порядковых номеров
+        self.points = []  # Список кортежей вида (вершина, номер)
 
         self.start_point = None
 
@@ -182,17 +237,8 @@ class GraphArea(QGraphicsView):
 
     def add_point(self, pos):
         """Добавление новой точки (вершины) на сцену."""
-        point_item = QGraphicsEllipseItem(0, 0, self.point_size, self.point_size)
-        point_item.setBrush(QtGui.QBrush(self.point_color))
-
-        # Установка обводки
-        pen = QtGui.QPen(QtGui.QColor("#000000"))  # Черный цвет обводки
-        pen.setWidth(0)  # Устанавливаем толщину обводки в 1 пиксель
-        point_item.setPen(pen)
-
-        point_item.setPos(pos.x() - self.point_size / 2, pos.y() - self.point_size / 2)
-        point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)  # Включаем перемещение
-        point_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)  # Включаем выбор
+        label = len(self.points) + 1  # Нумерация вершин
+        point_item = LabeledEllipse(pos.x(), pos.y(), self.point_size, self.point_color, label)
         if self.can_add_ellipse(point_item):
             self.scene.addItem(point_item)
             self.start_point = point_item
