@@ -154,7 +154,12 @@ class GraphArea(QGraphicsView):
             super().mousePressEvent(event)
 
     def add_line(self, pos1, pos2):
-        pass
+        """Добавление линии (ребра) между двумя точками."""
+        line_item = QGraphicsLineItem(QtCore.QLineF(pos1, pos2))
+        pen = QtGui.QPen(QtGui.QColor("#000000"))  # Цвет линии
+        pen.setWidth(2)  # Толщина линии
+        line_item.setPen(pen)
+        self.scene.addItem(line_item)
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
@@ -291,14 +296,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tools_button = SvgButton("tools-solid.svg")
         self.tools_button.setFixedWidth(int(monitor_width * 0.03))
         self.tool_panel_layout.addWidget(self.tools_button)
-
-        # Кнопка рисования (кисточка)
-        self.paint_button = SvgButton("paint-brush-solid.svg")
-        self.paint_button.setFixedWidth(int(monitor_width * 0.03))
-        self.paint_button.setCheckable(True)
-        self.paint_button.clicked.connect(self.switch_paint_ellipse_mode)
-        self.paint_button.clicked.connect(self.switch_move_mode)
-        self.tool_panel_layout.addWidget(self.paint_button)
 
         # Кнопка рисования кругов
         self.paint_ellipse_button = SvgButton("")
@@ -465,39 +462,35 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
     def switch_paint_ellipse_mode(self):
-        if self.erase_button.isChecked():
-            self.erase_button.setChecked(False)
-        self.graph_area.move_mode = False
-        self.graph_area.paint_mode = True
+        self.paint_line_button.setChecked(False)
+        self.erase_button.setChecked(False)
+        self.graph_area.paint_ellipse_mode = True
+        self.graph_area.paint_line_mode = False
         self.graph_area.delete_mode = False
-        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
-        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.graph_area.update()
+        self.graph_area.move_mode = False
 
     def switch_paint_line_mode(self):
-        if self.erase_button.isChecked():
-            self.erase_button.setChecked(False)
-        self.graph_area.move_mode = False
-        self.graph_area.paint_mode = True
+        self.graph_area.paint_line_mode = True
+        self.graph_area.paint_ellipse_mode = False
         self.graph_area.delete_mode = False
-        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
-        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.graph_area.update()
+        self.graph_area.move_mode = False
+        self.paint_ellipse_button.setChecked(False)
+        self.erase_button.setChecked(False)
 
     def switch_erase_mode(self):
-        if self.paint_button.isChecked():
-            self.paint_button.setChecked(False)
-        self.graph_area.move_mode = False
-        self.graph_area.paint_mode = False
         self.graph_area.delete_mode = True
-        self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
-        self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.graph_area.update()
+        self.graph_area.paint_ellipse_mode = False
+        self.graph_area.paint_line_mode = False
+        self.graph_area.move_mode = False
+        self.paint_ellipse_button.setChecked(False)
+        self.paint_line_button.setChecked(False)
 
     def switch_move_mode(self):
-        if not (self.erase_button.isChecked() or self.paint_button.isChecked()):
+        if not (
+                self.erase_button.isChecked() or self.paint_ellipse_button.isChecked() or self.paint_line_button.isChecked()):
             self.graph_area.move_mode = True
-            self.graph_area.paint_mode = False
+            self.graph_area.paint_ellipse_mode = False
+            self.graph_area.paint_line_mode = False
             self.graph_area.delete_mode = False
             self.graph_area.setCursor(QtCore.Qt.CursorShape.BusyCursor)
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
