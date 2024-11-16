@@ -133,13 +133,13 @@ class GraphArea(QGraphicsView):
         pos = self.mapToScene(event.position().toPoint())
 
         if self.paint_line_mode:
-                fl = 0
-                items = self.scene.items(pos)
-                for item in items:
-                    if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                        self.add_line(self.start_point.mapToScene(self.start_point.rect().center()),
-                                      item.mapToScene(item.rect().center()))
-                        print(546546)
+            fl = 0
+            items = self.scene.items(pos)
+            for item in items:
+                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                    self.add_line(self.start_point.mapToScene(self.start_point.rect().center()),
+                                  item.mapToScene(item.rect().center()))
+                    print(546546)
         elif self.paint_ellipse_mode:
             # Добавление новой точки
             self.add_point(pos)
