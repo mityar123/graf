@@ -2,9 +2,11 @@ import time
 import sys
 
 from screeninfo import get_monitors
+from sortedcontainers import SortedDict
 
 from PyQt6 import QtWidgets, QtGui, QtCore
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
+    QGraphicsItem
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -97,6 +99,12 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
 
+    def itemChange(self, change, value):
+        print(change, 123)
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            print(f"Элемент переместился. Новая позиция: {value}")
+        return super().itemChange(change, value)
+
     def set_label(self, label):
         """Изменить номер (метку)"""
         self.label.setPlainText(str(label))
@@ -129,6 +137,39 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.update_text_position(size)
 
 
+class GraphEdge(QGraphicsLineItem):
+    """Класс для рёбер графа"""
+
+    def __init__(self, start, end, color, weight=0, parent=None):
+        super().__init__(parent)
+        self.start_v = start
+        self.end_v = end
+        self.weight = weight
+
+        self.setPen(QtGui.QPen(QtGui.QColor(color), 2))
+
+        self.label = QtWidgets.QGraphicsTextItem(self)
+        self.label.setDefaultTextColor(QtGui.QColor("#000000"))
+        self.update_position()
+
+        # self.start_v.movable.connect(self.update_position)
+        # self.end_v.scenePosChanged.connect(self.update_position)
+
+    def update_position(self):
+        """Обновить положение линии и текста при перемещении вершин."""
+        line = QtCore.QLineF(self.start_v.scenePos(), self.end_v.scenePos())
+        self.setLine(line)
+
+        text_position = line.pointAt(0.5)  # 0 - начало, 1 - конец
+        self.label.setPos(text_position - QtCore.QPointF(self.label.boundingRect().width() / 2,
+                                                         self.label.boundingRect().height() / 2))
+
+    def set_weight(self, weight):
+        """Изменить вес ребра."""
+        self.weight = weight
+        self.label.setPlainText(str(weight))
+
+
 class GraphArea(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -149,8 +190,8 @@ class GraphArea(QGraphicsView):
         self.point_size = 10
         self.point_color = QtGui.QColor("#000000")
 
-        # Список для хранения вершин и их порядковых номеров
-        self.points = []  # Список кортежей вида (вершина, номер)
+        # Список смежности (словарь) для хранения вершин и их порядковых номеров
+        self.points = SortedDict()
 
         self.start_point = None
 
@@ -192,8 +233,8 @@ class GraphArea(QGraphicsView):
             items = self.scene.items(pos)
             for item in items:
                 if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                    self.add_line(self.start_point.mapToScene(self.start_point.rect().center()),
-                                  item.mapToScene(item.rect().center()))
+                    print(2)
+                    self.add_line(self.start_point, item)
                     print(546546)
         elif self.paint_ellipse_mode:
             # Добавление новой точки
@@ -208,13 +249,10 @@ class GraphArea(QGraphicsView):
         if fl:
             super().mousePressEvent(event)
 
-    def add_line(self, pos1, pos2):
-        """Добавление линии (ребра) между двумя точками."""
-        line_item = QGraphicsLineItem(QtCore.QLineF(pos1, pos2))
-        pen = QtGui.QPen(QtGui.QColor("#000000"))  # Цвет линии
-        pen.setWidth(2)  # Толщина линии
-        line_item.setPen(pen)
-        self.scene.addItem(line_item)
+    def add_line(self, start_vertex, end_vertex, weight=1):
+        """Добавление нового ребра между двумя вершинами."""
+        edge = GraphEdge(start_vertex, end_vertex, weight)
+        self.scene.addItem(edge)
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
@@ -227,7 +265,8 @@ class GraphArea(QGraphicsView):
                 existing_center = item.mapToScene(item.rect().center())
 
                 # Вычисляем расстояние между центрами
-                distance = (new_center - existing_center).manhattanLength()
+                distance = (
+                        new_center - existing_center).manhattanLength()  # создаёт вектор разности между центрами и возвращает сумму абсолютных разностей по осям, или же Манхэттенское расстояние (|х2 - х1|+|у2-у1|).
 
                 # Проверка, что расстояние больше суммы радиусов и минимального расстояния
                 if distance < (new_ellipse.rect().width() / 2 + item.rect().width() / 2 + 3):
@@ -241,6 +280,10 @@ class GraphArea(QGraphicsView):
         point_item = LabeledEllipse(pos.x(), pos.y(), self.point_size, self.point_color, label)
         if self.can_add_ellipse(point_item):
             self.scene.addItem(point_item)
+            if len(self.points):
+                self.points[self.points.peekitem(-1)[0] + 1] = []
+            else:
+                self.points[1] = []
             self.start_point = point_item
         else:
             del point_item
@@ -344,7 +387,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.tools_button)
 
         # Кнопка рисования кругов
-        self.paint_ellipse_button = SvgButton("")
+        self.paint_ellipse_button = SvgButton("circle-solid.svg")
         self.paint_ellipse_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_ellipse_button.setCheckable(True)
         self.paint_ellipse_button.clicked.connect(self.switch_paint_ellipse_mode)
@@ -352,7 +395,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.addWidget(self.paint_ellipse_button)
 
         # Кнопка рисования линий
-        self.paint_line_button = SvgButton("")
+        self.paint_line_button = SvgButton("line.svg")
         self.paint_line_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_line_button.setCheckable(True)
         self.paint_line_button.clicked.connect(self.switch_paint_line_mode)
