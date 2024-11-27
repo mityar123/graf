@@ -109,14 +109,13 @@ class LabeledEllipse(QGraphicsEllipseItem):
         # Устанавливаем флаги для перемещения и выделения
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
     def itemChange(self, change, value):
         super().itemChange(change, value)
-        print("tip top")
         # Проверяем, если изменена позиция объекта
-        if self.GraphicsItemChange.ItemPositionChange:
+        if change == QGraphicsEllipseItem.GraphicsItemChange.ItemPositionChange:
             self.signals.positionChanged.emit()  # Отправляем сигнал через SignalEmitter
-            print("Hello")
         return super().itemChange(change, value)
 
     def set_label(self, label):
@@ -180,7 +179,6 @@ class GraphEdge(QGraphicsLineItem):
                                                          self.label.boundingRect().height() / 2))
 
         self.update()
-        print("bye bye")
 
     def set_weight(self, weight):
         """Изменить вес ребра."""
@@ -251,9 +249,9 @@ class GraphArea(QGraphicsView):
             items = self.scene.items(pos)
             for item in items:
                 if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                    print(2)
                     self.add_line(self.start_point, item)
-                    print(546546)
+                    self.points[int(self.start_point.label.toPlainText())] = int(item.label.toPlainText())
+                    print(self.points)
         elif self.paint_ellipse_mode:
             # Добавление новой точки
             self.add_point(pos)
@@ -312,6 +310,12 @@ class GraphArea(QGraphicsView):
         for item in items:
             if isinstance(item, QGraphicsEllipseItem):
                 self.scene.removeItem(item)
+                self.points.popitem(int(item.label.toPlainText()) - 1)
+                self.update_number_on_point()
+
+    def update_number_on_point(self):
+        pass #переписать self.points на свой словарь который содержит {точка: [точка, точка, ...]}, а сортировка будет проходить по label.toPlainText()
+
 
     def select_point(self, pos):
         """Выбор точки для перемещения (или дополнительного взаимодействия)."""
