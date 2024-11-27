@@ -79,10 +79,21 @@ class About_program(QtWidgets.QWidget):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
+class SignalEmitter(QtCore.QObject):
+    """Класс для работы с сигналами."""
+    positionChanged = QtCore.pyqtSignal()  # Сигнал для изменения позиции
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+
 class LabeledEllipse(QGraphicsEllipseItem):
     def __init__(self, x, y, size, color, label, parent=None):
-        super().__init__(-size / 2, -size / 2, size, size, parent)  # Центрируем вершину относительно (x, y)
+        super().__init__(-size / 2, -size / 2, size, size, parent)  # Инициализируем QGraphicsEllipseItem
         self.setPos(x, y)
+
+        # Добавляем объект для сигналов
+        self.signals = SignalEmitter()
 
         # Настройка внешнего вида вершины
         self.setBrush(QtGui.QBrush(color))
@@ -100,9 +111,12 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
 
     def itemChange(self, change, value):
-        print(change, 123)
-        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            print(f"Элемент переместился. Новая позиция: {value}")
+        super().itemChange(change, value)
+        print("tip top")
+        # Проверяем, если изменена позиция объекта
+        if self.GraphicsItemChange.ItemPositionChange:
+            self.signals.positionChanged.emit()  # Отправляем сигнал через SignalEmitter
+            print("Hello")
         return super().itemChange(change, value)
 
     def set_label(self, label):
@@ -150,10 +164,11 @@ class GraphEdge(QGraphicsLineItem):
 
         self.label = QtWidgets.QGraphicsTextItem(self)
         self.label.setDefaultTextColor(QtGui.QColor("#000000"))
+
         self.update_position()
 
-        # self.start_v.movable.connect(self.update_position)
-        # self.end_v.scenePosChanged.connect(self.update_position)
+        self.start_v.signals.positionChanged.connect(self.update_position)
+        self.end_v.signals.positionChanged.connect(self.update_position)
 
     def update_position(self):
         """Обновить положение линии и текста при перемещении вершин."""
@@ -163,6 +178,9 @@ class GraphEdge(QGraphicsLineItem):
         text_position = line.pointAt(0.5)  # 0 - начало, 1 - конец
         self.label.setPos(text_position - QtCore.QPointF(self.label.boundingRect().width() / 2,
                                                          self.label.boundingRect().height() / 2))
+
+        self.update()
+        print("bye bye")
 
     def set_weight(self, weight):
         """Изменить вес ребра."""
