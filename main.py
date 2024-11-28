@@ -2,7 +2,6 @@ import time
 import sys
 
 from screeninfo import get_monitors
-from sortedcontainers import SortedDict
 
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
@@ -79,6 +78,75 @@ class About_program(QtWidgets.QWidget):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
+class SortedPointDict:
+    def __init__(self):
+        self.data = {}  # Основной словарь {точка: [связанные точки]}
+        self.sorted_keys = []  # Список точек, отсортированный по label.toPlainText()
+
+    def __setitem__(self, point, connected_points):
+        if point not in self.data:
+            self.sorted_keys.append(point)
+            self.sort_keys()
+        # Сортируем связанные точки перед добавлением
+        self.data[point] = sorted(connected_points, key=lambda p: int(p.label.toPlainText()))
+
+    def __getitem__(self, point):
+        return self.data[point]
+
+    def __delitem__(self, point):
+        del self.data[point]
+        self.sorted_keys.remove(point)
+
+    def __contains__(self, point):
+        return point in self.data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        for point in self.sorted_keys:
+            yield point
+
+    def keys(self):
+        return self.sorted_keys
+
+    def values(self):
+        return [self.data[point] for point in self.sorted_keys]
+
+    def items(self):
+        return [(point, self.data[point]) for point in self.sorted_keys]
+
+    def change_key(self, old_point, new_point):
+        """Изменение ключа (точки) в словаре. (подмена на новую с сохранением значений)"""
+        if old_point not in self.data:
+            raise KeyError(f"Point '{old_point}' not found")
+        if new_point in self.data:
+            raise KeyError(f"Point '{new_point}' already exists")
+
+        # Перемещаем значение и обновляем ключ
+        self.data[new_point] = self.data.pop(old_point)
+        self.sorted_keys.remove(old_point)
+        self.sorted_keys.append(new_point)
+        self.sort_keys()
+
+    def sort_keys(self):
+        """Сортировка точек по метке."""
+        self.sorted_keys.sort(key=lambda point: int(point.label.toPlainText()))
+
+    def sort_values(self):
+        """Сортировка значений (связанных точек) для каждого ключа."""
+        for key in self.data:
+            self.data[key] = sorted(self.data[key], key=lambda p: int(p.label.toPlainText()))
+
+    def sort_all(self):
+        """Сортировка ключей и значений."""
+        self.sort_keys()
+        self.sort_values()
+
+    def __repr__(self):
+        return f"{[(point.label.toPlainText(), [p.label.toPlainText() for p in connected_points]) for point, connected_points in self.items()]}"
+
+
 class SignalEmitter(QtCore.QObject):
     """Класс для работы с сигналами."""
     positionChanged = QtCore.pyqtSignal()  # Сигнал для изменения позиции
@@ -91,6 +159,8 @@ class LabeledEllipse(QGraphicsEllipseItem):
     def __init__(self, x, y, size, color, label, parent=None):
         super().__init__(-size / 2, -size / 2, size, size, parent)  # Инициализируем QGraphicsEllipseItem
         self.setPos(x, y)
+
+        self.setZValue(1)
 
         # Добавляем объект для сигналов
         self.signals = SignalEmitter()
@@ -105,6 +175,8 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.update_text_font(size)  # Настраиваем размер текста
         self.update_text_position(size)  # Центрируем текст
         self.update_text_color()  # Обновляем цвет текста в зависимости от цвета вершины
+
+        self.label.setZValue(1000)
 
         # Устанавливаем флаги для перемещения и выделения
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
@@ -125,8 +197,9 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.update_text_color()  # Перепроверка цвета текста
 
     def update_text_font(self, size):
-        """Обновляем размер шрифта текста в зависимости от размера вершины"""
-        font_size = size * 0.8  # Размер текста 80% от размера вершины
+        """Обновляем размер шрифта текста в зависимости от размера вершины и длины текста."""
+        text_length = len(self.label.toPlainText())
+        font_size = size * 0.8 / (1 + 0.3 * (text_length - 1))  # Уменьшаем шрифт, если текст длинный
         font = self.label.font()
         font.setPointSizeF(font_size)
         self.label.setFont(font)
@@ -159,10 +232,14 @@ class GraphEdge(QGraphicsLineItem):
         self.end_v = end
         self.weight = weight
 
+        self.setZValue(0)
+
         self.setPen(QtGui.QPen(QtGui.QColor(color), 2))
 
         self.label = QtWidgets.QGraphicsTextItem(self)
         self.label.setDefaultTextColor(QtGui.QColor("#000000"))
+
+        self.label.setZValue(1000)
 
         self.update_position()
 
@@ -207,7 +284,10 @@ class GraphArea(QGraphicsView):
         self.point_color = QtGui.QColor("#000000")
 
         # Список смежности (словарь) для хранения вершин и их порядковых номеров
-        self.points = SortedDict()
+        self.points = SortedPointDict()
+
+        # вспомогательное хранилище для рёбер
+        self.edges = []
 
         self.start_point = None
 
@@ -248,16 +328,18 @@ class GraphArea(QGraphicsView):
             fl = 0
             items = self.scene.items(pos)
             for item in items:
-                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point and
+                        item not in self.points[self.start_point]):
                     self.add_line(self.start_point, item)
-                    self.points[int(self.start_point.label.toPlainText())] = int(item.label.toPlainText())
-                    print(self.points)
+                    self.points[self.start_point].append(item)
+                    self.points[item].append(self.start_point)
+                    self.points.sort_values()
         elif self.paint_ellipse_mode:
             # Добавление новой точки
             self.add_point(pos)
         elif self.delete_mode:
             # Удаление точки при нажатии
-            self.delete_point(pos)
+            self.delete_obj(pos)
         elif self.move_mode:
             # Логика перемещения (можно доработать)
             self.select_point(pos)
@@ -269,24 +351,24 @@ class GraphArea(QGraphicsView):
         """Добавление нового ребра между двумя вершинами."""
         edge = GraphEdge(start_vertex, end_vertex, weight)
         self.scene.addItem(edge)
+        self.edges.append(edge)
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
         new_center = new_ellipse.mapToScene(new_ellipse.rect().center())
 
         # Проходим по всем объектам на сцене
-        for item in self.scene.items():
-            if isinstance(item, QGraphicsEllipseItem):
-                # Получаем центр существующего элипса в координатах сцены
-                existing_center = item.mapToScene(item.rect().center())
+        for item in self.points.sorted_keys:
+            # Получаем центр существующего элипса в координатах сцены
+            existing_center = item.mapToScene(item.rect().center())
 
-                # Вычисляем расстояние между центрами
-                distance = (
-                        new_center - existing_center).manhattanLength()  # создаёт вектор разности между центрами и возвращает сумму абсолютных разностей по осям, или же Манхэттенское расстояние (|х2 - х1|+|у2-у1|).
+            # Вычисляем расстояние между центрами
+            distance = (
+                    new_center - existing_center).manhattanLength()  # создаёт вектор разности между центрами и возвращает сумму абсолютных разностей по осям, или же Манхэттенское расстояние (|х2 - х1|+|у2-у1|).
 
-                # Проверка, что расстояние больше суммы радиусов и минимального расстояния
-                if distance < (new_ellipse.rect().width() / 2 + item.rect().width() / 2 + 3):
-                    return False
+            # Проверка, что расстояние больше суммы радиусов и минимального расстояния
+            if distance < (new_ellipse.rect().width() / 2 + item.rect().width() / 2 + 3):
+                return False
 
         return True
 
@@ -297,25 +379,104 @@ class GraphArea(QGraphicsView):
         if self.can_add_ellipse(point_item):
             self.scene.addItem(point_item)
             if len(self.points):
-                self.points[self.points.peekitem(-1)[0] + 1] = []
+                point_item.label.setPlainText(f"{int(self.points.keys()[-1].label.toPlainText()) + 1}")
+                self.points[point_item] = []
             else:
-                self.points[1] = []
+                point_item.label.setPlainText("1")
+                self.points[point_item] = []
             self.start_point = point_item
         else:
             del point_item
 
-    def delete_point(self, pos):
-        """Удаление точки при нажатии на неё."""
+    def delete_obj(self, pos):
+        """Удаление бъекта на сцене при нажатии на него."""
         items = self.scene.items(pos)
+
+        # Проверка вершин
         for item in items:
             if isinstance(item, QGraphicsEllipseItem):
                 self.scene.removeItem(item)
-                self.points.popitem(int(item.label.toPlainText()) - 1)
+                temp = []
+                for l in self.edges:
+                    if l.start_v == item or l.end_v == item:
+                        self.scene.removeItem(l)
+                        temp.append(l)
+                for l in temp:
+                    self.edges.remove(l)
+                for p in self.points[item]:
+                    self.points[p].remove(item)
+                del self.points[item]
                 self.update_number_on_point()
+                return  # Прерываем обработку, если нашли вершину
+
+        # Проверка рёбер
+        threshold = 5  # Пороговое расстояние для удаления линии
+        # Проверка линий на близость к месту клика
+        for item in self.edges:
+            line = item.line()
+            dist = self._distance_from_point_to_line(pos, line)
+            if dist <= threshold:  # Проверяем расстояние
+                self.scene.removeItem(item)
+                self.points[item.start_v].remove(item.end_v)
+                self.points[item.end_v].remove(item.start_v)
+                self.edges.remove(item)
+                return  # Прерываем обработку, если удалено ребро
+
+    def _distance_from_point_to_line(self, point, line, end_threshold=10):
+        """
+        Вычислить расстояние от точки до линии с учётом порога около концов
+        и ограничением на принадлежность проекции отрезку.
+
+        :param point: Точка, для которой вычисляется расстояние.
+        :param line: Линия, до которой вычисляется расстояние.
+        :param end_threshold: Пороговое расстояние от концов линии, в пределах которого расстояние не считается.
+        :return: Расстояние от точки до линии или бесконечность, если точка близка к концам или не проецируется на отрезок.
+        """
+        p1, p2 = line.p1(), line.p2()
+
+        # Вычисляем расстояния от точки до концов линии
+        distance_to_p1 = ((point.x() - p1.x()) ** 2 + (point.y() - p1.y()) ** 2) ** 0.5
+        distance_to_p2 = ((point.x() - p2.x()) ** 2 + (point.y() - p2.y()) ** 2) ** 0.5
+
+        # Если точка близка к одному из концов, возвращаем бесконечность
+        if distance_to_p1 < end_threshold or distance_to_p2 < end_threshold:
+            return float('inf')
+
+        # Векторы
+        p1_to_p2 = QtCore.QPointF(p2.x() - p1.x(), p2.y() - p1.y())  # Вектор от p1 к p2
+        p1_to_point = QtCore.QPointF(point.x() - p1.x(), point.y() - p1.y())  # Вектор от p1 к точке
+
+        # Скалярное произведение и длина вектора
+        dot_product = (p1_to_point.x() * p1_to_p2.x() + p1_to_point.y() * p1_to_p2.y())
+        segment_length_squared = (p1_to_p2.x() ** 2 + p1_to_p2.y() ** 2)
+
+        # Проекция точки на линию
+        projection_length = dot_product / segment_length_squared if segment_length_squared != 0 else -1
+
+        # Координаты проекции на линии
+        proj_x = p1.x() + projection_length * p1_to_p2.x()
+        proj_y = p1.y() + projection_length * p1_to_p2.y()
+
+        # Проверяем, находится ли проекция внутри сегмента
+        if not (min(p1.x(), p2.x()) <= proj_x <= max(p1.x(), p2.x()) and
+                min(p1.y(), p2.y()) <= proj_y <= max(p1.y(), p2.y())):
+            return float('inf')
+
+        # Вычисляем расстояние от точки до линии
+        numerator = abs(
+            (p2.y() - p1.y()) * point.x() - (p2.x() - p1.x()) * point.y() + p2.x() * p1.y() - p2.y() * p1.x()
+        )
+        denominator = line.length()
+
+        return numerator / denominator if denominator != 0 else float('inf')
 
     def update_number_on_point(self):
-        pass #переписать self.points на свой словарь который содержит {точка: [точка, точка, ...]}, а сортировка будет проходить по label.toPlainText()
-
+        keys = self.points.keys()
+        for i in range(len(keys) - 1):
+            if int(keys[i + 1].label.toPlainText()) - int(keys[i].label.toPlainText()) > 1:
+                for j in range(i + 1, len(keys)):
+                    keys[j].label.setPlainText(f"{int(keys[j].label.toPlainText()) - 1}")
+                break
 
     def select_point(self, pos):
         """Выбор точки для перемещения (или дополнительного взаимодействия)."""
