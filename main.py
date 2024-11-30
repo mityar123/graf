@@ -181,7 +181,21 @@ class LabeledEllipse(QGraphicsEllipseItem):
         # Устанавливаем флаги для перемещения и выделения
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
+
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges)
+
+    # def paint(self, painter, option, widget):
+    #     # Проверяем, выбран ли элемент
+    #     if self.isSelected():
+    #         print(painter.brush())
+    #         print(option.palette)
+    #         # Если выбран, просто отрисуем круг без рамки
+    #         painter.drawEllipse(self.rect())
+    #     else:
+    #         # Если не выбран, отрисуем круг с заливкой и рамкой
+    #         painter.setBrush(QtGui.QBrush(QtGui.QColor(100, 200, 255)))  # Цвет заливки
+    #         painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 2))  # Цвет рамки и ее толщина
+    #         painter.drawEllipse(self.rect())
 
     def itemChange(self, change, value):
         super().itemChange(change, value)
@@ -324,7 +338,8 @@ class GraphArea(QGraphicsView):
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
         pos = self.mapToScene(event.position().toPoint())
 
-        if self.paint_line_mode:
+        if self.paint_line_mode and self.start_point is not None and (
+                event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             fl = 0
             items = self.scene.items(pos)
             for item in items:
@@ -334,6 +349,21 @@ class GraphArea(QGraphicsView):
                     self.points[self.start_point].append(item)
                     self.points[item].append(self.start_point)
                     self.points.sort_values()
+                    break
+        elif self.paint_line_mode and self.start_point is not None:
+            fl = 0
+            items = self.scene.items(pos)
+            for item in items:
+                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point and
+                        item not in self.points[self.start_point]):
+                    self.add_line(self.start_point, item)
+                    self.points[self.start_point].append(item)
+                    self.points[item].append(self.start_point)
+                    self.points.sort_values()
+                    break
+            self.start_point = None
+        elif self.paint_line_mode:
+            self.select_point(pos)
         elif self.paint_ellipse_mode:
             # Добавление новой точки
             self.add_point(pos)
@@ -387,6 +417,7 @@ class GraphArea(QGraphicsView):
             self.start_point = point_item
         else:
             del point_item
+            self.select_point(pos)
 
     def delete_obj(self, pos):
         """Удаление бъекта на сцене при нажатии на него."""
@@ -405,8 +436,11 @@ class GraphArea(QGraphicsView):
                     self.edges.remove(l)
                 for p in self.points[item]:
                     self.points[p].remove(item)
+                if self.points.sorted_keys[0] == item and len(self.points.sorted_keys) > 1:
+                    self.points.sorted_keys[1].label.setPlainText("1")
                 del self.points[item]
-                self.update_number_on_point()
+                if len(self.points.sorted_keys):
+                    self.update_number_on_point()
                 return  # Прерываем обработку, если нашли вершину
 
         # Проверка рёбер
@@ -725,7 +759,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.color = color.name()
             self.graph_area.set_point_color(hex_to_QColor(self.color))
             self.color_btn.setStyleSheet(
-                f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
+                f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 4}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
     def change_size(self):
         self.graph_area.set_point_size(self.size_slider.value() + 3)  # Меняем размер точки в рабочей области
@@ -764,9 +798,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.paint_ellipse_mode = False
             self.graph_area.paint_line_mode = False
             self.graph_area.delete_mode = False
-            self.graph_area.setCursor(QtCore.Qt.CursorShape.BusyCursor)
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
+            self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
 
     def choose_background(self):
         """Переключение сетки на графе."""
