@@ -213,7 +213,7 @@ class LabeledEllipse(QGraphicsEllipseItem):
     def update_text_font(self, size):
         """Обновляем размер шрифта текста в зависимости от размера вершины и длины текста."""
         text_length = len(self.label.toPlainText())
-        font_size = size * 0.8 / (1 + 0.3 * (text_length - 1))  # Уменьшаем шрифт, если текст длинный
+        font_size = size * 0.8 / (1 + 0.3 * (text_length - 1)) - 1  # Уменьшаем шрифт, если текст длинный
         font = self.label.font()
         font.setPointSizeF(font_size)
         self.label.setFont(font)
@@ -287,7 +287,6 @@ class GraphArea(QGraphicsView):
         self.scene.setSceneRect(-infinite_size, -infinite_size, 2 * infinite_size, 2 * infinite_size)
         self.setScene(self.scene)
         self.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
         # Убираем ползунки для рабочей области
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -334,8 +333,8 @@ class GraphArea(QGraphicsView):
             self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
 
     def mousePressEvent(self, event):
-        fl = 1
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
+        fl = 1
         pos = self.mapToScene(event.position().toPoint())
 
         if self.paint_line_mode and self.start_point is not None and (
@@ -362,6 +361,7 @@ class GraphArea(QGraphicsView):
                     self.points.sort_values()
                     break
             self.start_point = None
+            self.scene.clearSelection()
         elif self.paint_line_mode:
             self.select_point(pos)
         elif self.paint_ellipse_mode:
@@ -774,6 +774,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.paint_line_mode = False
         self.graph_area.delete_mode = False
         self.graph_area.move_mode = False
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
 
     def switch_paint_line_mode(self):
         self.graph_area.paint_line_mode = True
@@ -782,6 +783,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.move_mode = False
         self.paint_ellipse_button.setChecked(False)
         self.erase_button.setChecked(False)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
 
     def switch_erase_mode(self):
         self.graph_area.delete_mode = True
@@ -790,6 +792,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.move_mode = False
         self.paint_ellipse_button.setChecked(False)
         self.paint_line_button.setChecked(False)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
 
     def switch_move_mode(self):
         if not (
@@ -798,9 +801,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.paint_ellipse_mode = False
             self.graph_area.paint_line_mode = False
             self.graph_area.delete_mode = False
+            self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
-            self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
 
     def choose_background(self):
         """Переключение сетки на графе."""
