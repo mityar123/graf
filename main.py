@@ -754,7 +754,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.wnd_about.show()  # Используем show() для открытия окна
 
     def choose_custom_color(self):
-        color = QtWidgets.QColorDialog.getColor()
+        color = QtWidgets.QColorDialog.getColor(parent=self)
         if color.isValid():
             self.color = color.name()
             self.graph_area.set_point_color(hex_to_QColor(self.color))
