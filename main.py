@@ -1,5 +1,6 @@
 import time
 import sys
+import json
 
 from screeninfo import get_monitors
 
@@ -702,6 +703,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         # Подключение действий для кнопок
         self.new_action.triggered.connect(self.new_graf)
+        self.save_action.triggered.connect(self.save_graf)
+        self.load_action.triggered.connect(self.load_graf)
         self.settings_action.triggered.connect(self.settings)
         self.about_action.triggered.connect(self.about_program)
         self.exit_action.triggered.connect(self.close)
@@ -739,11 +742,37 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
 
+    def serialize_graph(self, points, edges):
+        points = [(p.pos().x(), p.pos().y()) for p in points.keys()]
+        edges = [((p.start_v.pos().x(), p.start_v.pos().y()), (p.end_v.pos().x(), p.end_v.pos().y())) for p in edges]
+
+        data = {
+            "points": points,
+            "edges": edges
+        }
+        return json.dumps(data, indent=4)
+
     def save_graf(self):
-        pass
+        name, _ = QtWidgets.QFileDialog.getSaveFileName(self, parent=self, "Сохранить граф", "", "Graf Files (*.graf)")
+        if name:
+            with open(name, 'w') as file:
+                file.write(self.serialize_graph(self.graph_area.points, self.graph_area.edges))
 
     def load_graf(self):
-        pass
+        name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Открыть граф", "", "Graf Files (*.graf)")
+        if name:
+            with open(name, 'r') as file:
+                graph_data = json.load(file)
+            deserialized_vertices = graph_data["vertices"]
+            deserialized_edges = graph_data["edges"]
+            # Восстановите граф, используя десериализованные данные
+            self.graph_area.reset_graph()
+            for vertex in deserialized_vertices:
+                self.graph_area.add_point(vertex["position"])
+                self.graph_area.points[vertex["id"]] = vertex["connections"]
+            for edge in deserialized_edges:
+                self.graph_area.add_line(deserialized_vertices[edge["start"]], deserialized_vertices[edge["end"]],
+                                         edge["weight"])
 
     def settings(self):
         self.wnd_settings = Settings()  # Создаем экземпляр Settings
