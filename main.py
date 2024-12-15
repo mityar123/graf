@@ -81,7 +81,7 @@ class About_program(QtWidgets.QWidget):
 
 class SortedPointDict:
     def __init__(self):
-        self.data = {}  # Основной словарь {точка: [связанные точки]}
+        self.data = {}  # Основной словарь {точка: [[связанная точка, рёро которым связано], ...] ...}
         self.sorted_keys = []  # Список точек, отсортированный по label.toPlainText()
 
     def __setitem__(self, point, connected_points):
@@ -89,7 +89,8 @@ class SortedPointDict:
             self.sorted_keys.append(point)
             self.sort_keys()
         # Сортируем связанные точки перед добавлением
-        self.data[point] = sorted(connected_points, key=lambda p: int(p.label.toPlainText()))
+        self.data[point] = connected_points
+        self.sort_values()
 
     def __getitem__(self, point):
         return self.data[point]
@@ -108,6 +109,10 @@ class SortedPointDict:
         for point in self.sorted_keys:
             yield point
 
+    def clear(self):
+        self.data = {}
+        self.sorted_keys = []
+
     def keys(self):
         return self.sorted_keys
 
@@ -117,18 +122,18 @@ class SortedPointDict:
     def items(self):
         return [(point, self.data[point]) for point in self.sorted_keys]
 
-    def change_key(self, old_point, new_point):
-        """Изменение ключа (точки) в словаре. (подмена на новую с сохранением значений)"""
-        if old_point not in self.data:
-            raise KeyError(f"Point '{old_point}' not found")
-        if new_point in self.data:
-            raise KeyError(f"Point '{new_point}' already exists")
-
-        # Перемещаем значение и обновляем ключ
-        self.data[new_point] = self.data.pop(old_point)
-        self.sorted_keys.remove(old_point)
-        self.sorted_keys.append(new_point)
-        self.sort_keys()
+    # def change_key(self, old_point, new_point):
+    #    """Изменение ключа (точки) в словаре. (подмена на новую с сохранением значений)"""
+    #    if old_point not in self.data:
+    #        raise KeyError(f"Point '{old_point}' not found")
+    #    if new_point in self.data:
+    #        raise KeyError(f"Point '{new_point}' already exists")
+    #
+    #    # Перемещаем значение и обновляем ключ
+    #    self.data[new_point] = self.data.pop(old_point)
+    #    self.sorted_keys.remove(old_point)
+    #    self.sorted_keys.append(new_point)
+    #    self.sort_keys()
 
     def sort_keys(self):
         """Сортировка точек по метке."""
@@ -137,7 +142,8 @@ class SortedPointDict:
     def sort_values(self):
         """Сортировка значений (связанных точек) для каждого ключа."""
         for key in self.data:
-            self.data[key] = sorted(self.data[key], key=lambda p: int(p.label.toPlainText()))
+            if (len(self.data[key]) != 0):
+                self.data[key] = sorted(self.data[key], key=lambda p: int(p[0].label.toPlainText()))
 
     def sort_all(self):
         """Сортировка ключей и значений."""
@@ -145,7 +151,7 @@ class SortedPointDict:
         self.sort_values()
 
     def __repr__(self):
-        return f"{[(point.label.toPlainText(), [p.label.toPlainText() for p in connected_points]) for point, connected_points in self.items()]}"
+        return f"{[(point.label.toPlainText(), [(p.label.toPlainText(), (ed.start_v.label.toPlainText(), ed.end_v.label.toPlainText())) for p, ed in connected_points]) for point, connected_points in self.items()]}"
 
 
 class SignalEmitter(QtCore.QObject):
@@ -343,27 +349,35 @@ class GraphArea(QGraphicsView):
             fl = 0
             items = self.scene.items(pos)
             for item in items:
-                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point and
-                        item not in self.points[self.start_point]):
-                    self.add_line(self.start_point, item)
-                    self.points[self.start_point].append(item)
-                    self.points[item].append(self.start_point)
-                    self.points.sort_values()
-                    break
+                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point):
+                    for pt in self.points[self.start_point]:
+                        if item == pt[0]:
+                            break
+                    else:
+                        edge = self.add_line(self.start_point, item)
+                        self.points[self.start_point].append((item, edge))
+                        self.points[item].append((self.start_point, self.reverse_edge(
+                            edge)))  # при добавлении направленных сделать условие на то что нет в эту сторону
+                        self.points.sort_values()
+                        break
         elif self.paint_line_mode and self.start_point is not None:
             fl = 0
             items = self.scene.items(pos)
             for item in items:
-                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point and
-                        item not in self.points[self.start_point]):
-                    self.add_line(self.start_point, item)
-                    self.points[self.start_point].append(item)
-                    self.points[item].append(self.start_point)
-                    self.points.sort_values()
-                    break
+                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point):
+                    for pt in self.points[self.start_point]:
+                        if item == pt[0]:
+                            break
+                    else:
+                        edge = self.add_line(self.start_point, item)
+                        self.points[self.start_point].append((item, edge))
+                        self.points[item].append((self.start_point, self.reverse_edge(
+                            edge)))  # при добавлении направленных сделать условие на то что нет в эту сторону
+                        self.points.sort_values()
+                        break
             self.start_point = None
             self.scene.clearSelection()
-        elif self.paint_line_mode:
+        elif self.paint_line_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             self.select_point(pos)
         elif self.paint_ellipse_mode:
             # Добавление новой точки
@@ -371,18 +385,22 @@ class GraphArea(QGraphicsView):
         elif self.delete_mode:
             # Удаление точки при нажатии
             self.delete_obj(pos)
-        elif self.move_mode:
+        elif self.move_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             # Логика перемещения (можно доработать)
             self.select_point(pos)
 
         if fl:
             super().mousePressEvent(event)
 
+    def reverse_edge(self, edge):
+        r_edge = GraphEdge(edge.end_v, edge.start_v, edge.weight)
+        return r_edge
+
     def add_line(self, start_vertex, end_vertex, weight=1):
         """Добавление нового ребра между двумя вершинами."""
         edge = GraphEdge(start_vertex, end_vertex, weight)
         self.scene.addItem(edge)
-        self.edges.append(edge)
+        return edge
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
@@ -511,6 +529,7 @@ class GraphArea(QGraphicsView):
             if int(keys[i + 1].label.toPlainText()) - int(keys[i].label.toPlainText()) > 1:
                 for j in range(i + 1, len(keys)):
                     keys[j].label.setPlainText(f"{int(keys[j].label.toPlainText()) - 1}")
+                    keys[j].update_text_position(keys[j].scale())
                 break
 
     def select_point(self, pos):
@@ -533,6 +552,7 @@ class GraphArea(QGraphicsView):
     def reset_graph(self):
         """Очистка сцены."""
         self.scene.clear()
+        self.points.clear()
 
 
 class SvgButton(QtWidgets.QPushButton):
@@ -675,7 +695,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         gorizontal_layout.addWidget(self.side_panel)
 
         # Создание рабочей зоны
-        self.graph_area = GraphArea()
+        self.graph_area = GraphArea(self)
         gorizontal_layout.addWidget(self.graph_area)  # Добавляем рабочую зону в layout
 
         # Установка растяжения для боковой панели и рабочей зоны
@@ -740,11 +760,19 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Очистка и сброс текущего графа
         self.graph_area.reset_graph()
 
-        name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
+        #name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
 
-    def serialize_graph(self, points, edges):
-        points = [(p.pos().x(), p.pos().y()) for p in points.keys()]
-        edges = [((p.start_v.pos().x(), p.start_v.pos().y()), (p.end_v.pos().x(), p.end_v.pos().y())) for p in edges]
+    def tansform_graph(self, points, edges):
+        # points = [(p.pos().x(), p.pos().y()) for p in points.keys()]
+        # edges = [((p.start_v.pos().x(), p.start_v.pos().y()), (p.end_v.pos().x(), p.end_v.pos().y())) for p in edges]
+
+        t_points = [
+            {
+                "id": pt.lable.text(),
+                "pos": {"x": pt.pos().x(), "y": pt.pos().y()},
+
+            }
+            for pt in points]
 
         data = {
             "points": points,
@@ -753,25 +781,26 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         return json.dumps(data, indent=4)
 
     def save_graf(self):
-        name, _ = QtWidgets.QFileDialog.getSaveFileName(self, parent=self, "Сохранить граф", "", "Graf Files (*.graf)")
+        name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
         if name:
             with open(name, 'w') as file:
-                file.write(self.serialize_graph(self.graph_area.points, self.graph_area.edges))
+                print(self.graph_area.points)
+                file.write(self.tansform_graph(self.graph_area.points, self.graph_area.edges))
 
     def load_graf(self):
         name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Открыть граф", "", "Graf Files (*.graf)")
         if name:
             with open(name, 'r') as file:
                 graph_data = json.load(file)
-            deserialized_vertices = graph_data["vertices"]
-            deserialized_edges = graph_data["edges"]
-            # Восстановите граф, используя десериализованные данные
+            convert_points = graph_data["points"]
+            convert_edges = graph_data["edges"]
+            # Восстановить граф, используя полученные данные
             self.graph_area.reset_graph()
-            for vertex in deserialized_vertices:
-                self.graph_area.add_point(vertex["position"])
-                self.graph_area.points[vertex["id"]] = vertex["connections"]
-            for edge in deserialized_edges:
-                self.graph_area.add_line(deserialized_vertices[edge["start"]], deserialized_vertices[edge["end"]],
+            for point in convert_points:
+                self.graph_area.add_point(point)
+                self.graph_area.points[point[3]] = []
+            for edge in convert_edges:
+                self.graph_area.add_line(convert_points[edge["start"]], convert_edges[edge["end"]],
                                          edge["weight"])
 
     def settings(self):
