@@ -166,6 +166,7 @@ class LabeledEllipse(QGraphicsEllipseItem):
     def __init__(self, x, y, size, color, label, parent=None):
         super().__init__(-size / 2, -size / 2, size, size, parent)  # Инициализируем QGraphicsEllipseItem
         self.setPos(x, y)
+        self.color = color
 
         self.setZValue(1)
 
@@ -306,9 +307,6 @@ class GraphArea(QGraphicsView):
         # Список смежности (словарь) для хранения вершин и их порядковых номеров
         self.points = SortedPointDict()
 
-        # вспомогательное хранилище для рёбер
-        self.edges = []
-
         self.start_point = None
 
         # шаг увеличения
@@ -445,16 +443,17 @@ class GraphArea(QGraphicsView):
         # Проверка вершин
         for item in items:
             if isinstance(item, QGraphicsEllipseItem):
+                # Удаляем рёбра, связанные с вершиной
+                for connected_point, edge in self.points[item]:
+                    self.scene.removeItem(edge)  # Удаляем ребро из сцены
+                    # Также удалим запись об этом ребре у связанной вершины
+                    for i in range(len(self.points[connected_point])):
+                        if self.points[connected_point][i][0] == item:
+                            self.scene.removeItem(self.points[connected_point][i][1])
+                            del self.points[connected_point][i]
+                            break
+                # Теперь удаляем вершину
                 self.scene.removeItem(item)
-                temp = []
-                for l in self.edges:
-                    if l.start_v == item or l.end_v == item:
-                        self.scene.removeItem(l)
-                        temp.append(l)
-                for l in temp:
-                    self.edges.remove(l)
-                for p in self.points[item]:
-                    self.points[p].remove(item)
                 if self.points.sorted_keys[0] == item and len(self.points.sorted_keys) > 1:
                     self.points.sorted_keys[1].label.setPlainText("1")
                 del self.points[item]
@@ -463,17 +462,27 @@ class GraphArea(QGraphicsView):
                 return  # Прерываем обработку, если нашли вершину
 
         # Проверка рёбер
-        threshold = 5  # Пороговое расстояние для удаления линии
+        threshold = 4  # Пороговое расстояние для удаления линии
         # Проверка линий на близость к месту клика
-        for item in self.edges:
-            line = item.line()
-            dist = self._distance_from_point_to_line(pos, line)
-            if dist <= threshold:  # Проверяем расстояние
-                self.scene.removeItem(item)
-                self.points[item.start_v].remove(item.end_v)
-                self.points[item.end_v].remove(item.start_v)
-                self.edges.remove(item)
-                return  # Прерываем обработку, если удалено ребро
+        for item in self.scene.items():
+            if isinstance(item, QGraphicsLineItem):
+                line = item.line()
+                dist = self._distance_from_point_to_line(pos, line)
+                if dist <= threshold:  # Проверяем расстояние
+                    self.scene.removeItem(item)
+                    for connected_point, edge in self.points[item.start_v]:
+                        for i in range(len(self.points[connected_point])):
+                            if self.points[connected_point][i][0] == item.end_v or self.points[connected_point][i][
+                                0] == item.start_v:
+                                del self.points[connected_point][i]
+                                break
+                    for connected_point, edge in self.points[item.end_v]:
+                        for i in range(len(self.points[connected_point])):
+                            if self.points[connected_point][i][0] == item.start_v or self.points[connected_point][i][
+                                0] == item.end_v:
+                                del self.points[connected_point][i]
+                                break
+                    return  # Прерываем обработку, если удалено ребро
 
     def _distance_from_point_to_line(self, point, line, end_threshold=10):
         """
@@ -529,7 +538,7 @@ class GraphArea(QGraphicsView):
             if int(keys[i + 1].label.toPlainText()) - int(keys[i].label.toPlainText()) > 1:
                 for j in range(i + 1, len(keys)):
                     keys[j].label.setPlainText(f"{int(keys[j].label.toPlainText()) - 1}")
-                    keys[j].update_text_position(keys[j].scale())
+                    keys[j].update_text_position(keys[j].rect().width())
                 break
 
     def select_point(self, pos):
@@ -760,23 +769,24 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Очистка и сброс текущего графа
         self.graph_area.reset_graph()
 
-        #name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
+        # name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
 
-    def tansform_graph(self, points, edges):
-        # points = [(p.pos().x(), p.pos().y()) for p in points.keys()]
-        # edges = [((p.start_v.pos().x(), p.start_v.pos().y()), (p.end_v.pos().x(), p.end_v.pos().y())) for p in edges]
-
+    def tansform_graph(self, points):
+        # трансформирование точек
         t_points = [
             {
-                "id": pt.lable.text(),
+                "id": pt.label.toPlainText(),
                 "pos": {"x": pt.pos().x(), "y": pt.pos().y()},
-
+                "link": [x[0].label.toPlainText() for x in points[pt]],
+                "size": pt.rect().width(),
+                "color": QColor_to_hex(pt.color),
             }
-            for pt in points]
+            for pt in points.keys()]
+
+        print(t_points)
 
         data = {
-            "points": points,
-            "edges": edges
+            "points": t_points,
         }
         return json.dumps(data, indent=4)
 
@@ -784,8 +794,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
         if name:
             with open(name, 'w') as file:
-                print(self.graph_area.points)
-                file.write(self.tansform_graph(self.graph_area.points, self.graph_area.edges))
+                file.write(self.tansform_graph(self.graph_area.points))
 
     def load_graf(self):
         name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Открыть граф", "", "Graf Files (*.graf)")
