@@ -339,6 +339,7 @@ class GraphArea(QGraphicsView):
 
     def mousePressEvent(self, event):
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
+        print(self.points)
         fl = 1
         pos = self.mapToScene(event.position().toPoint())
 
@@ -469,20 +470,26 @@ class GraphArea(QGraphicsView):
                 line = item.line()
                 dist = self._distance_from_point_to_line(pos, line)
                 if dist <= threshold:  # Проверяем расстояние
+                    start_v = item.start_v
+                    end_v = item.end_v
                     self.scene.removeItem(item)
-                    for connected_point, edge in self.points[item.start_v]:
-                        for i in range(len(self.points[connected_point])):
-                            if self.points[connected_point][i][0] == item.end_v or self.points[connected_point][i][
-                                0] == item.start_v:
-                                del self.points[connected_point][i]
-                                break
-                    for connected_point, edge in self.points[item.end_v]:
-                        for i in range(len(self.points[connected_point])):
-                            if self.points[connected_point][i][0] == item.start_v or self.points[connected_point][i][
-                                0] == item.end_v:
-                                del self.points[connected_point][i]
-                                break
+                    print(f"Удалена линия: {start_v} -> {end_v}")
+
+                    # Удаляем ссылки на ребра из self.points
+                    self._update_points(start_v, end_v)
+                    self._update_points(end_v, start_v)
                     return  # Прерываем обработку, если удалено ребро
+
+    def _update_points(self, from_vertex, to_vertex):
+        """Обновляет структуру self.points, удаляя ссылку на ребро."""
+        edges_to_remove = []
+        for connected_point, edge in self.points[from_vertex]:
+            if connected_point == to_vertex:
+                edges_to_remove.append((connected_point, edge))
+
+        for edge in edges_to_remove:
+            self.points[from_vertex].remove(edge)
+            print(f"Удалена связь: {edge} из {from_vertex}")
 
     def _distance_from_point_to_line(self, point, line, end_threshold=10):
         """
