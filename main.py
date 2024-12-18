@@ -7,6 +7,7 @@ from screeninfo import get_monitors
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
     QGraphicsItem
+from setuptools.extern import names
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -348,42 +349,33 @@ class GraphArea(QGraphicsView):
             fl = 0
             items = self.scene.items(pos)
             for item in items:
-                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point):
-                    for pt in self.points[self.start_point]:
-                        if item == pt[0]:
-                            break
-                    else:
-                        edge = self.add_line(self.start_point, item)
-                        self.points[self.start_point].append((item, edge))
-                        self.points[item].append((self.start_point, self.reverse_edge(
-                            edge)))  # при добавлении направленных сделать условие на то что нет в эту сторону
-                        self.points.sort_values()
+                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                    if self.can_add_line(self.start_point, item):
+                        self.add_line(self.start_point, item)
                         break
+
         elif self.paint_line_mode and self.start_point is not None:
             fl = 0
             items = self.scene.items(pos)
             for item in items:
-                if (isinstance(item, QGraphicsEllipseItem) and item != self.start_point):
-                    for pt in self.points[self.start_point]:
-                        if item == pt[0]:
-                            break
-                    else:
-                        edge = self.add_line(self.start_point, item)
-                        self.points[self.start_point].append((item, edge))
-                        self.points[item].append((self.start_point, self.reverse_edge(
-                            edge)))  # при добавлении направленных сделать условие на то что нет в эту сторону
-                        self.points.sort_values()
+                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                    if self.can_add_line(self.start_point, item):
+                        self.add_line(self.start_point, item)
                         break
             self.start_point = None
             self.scene.clearSelection()
+
         elif self.paint_line_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             self.select_point(pos)
+
         elif self.paint_ellipse_mode:
             # Добавление новой точки
             self.add_point(pos)
+
         elif self.delete_mode:
             # Удаление точки при нажатии
             self.delete_obj(pos)
+
         elif self.move_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             # Логика перемещения (можно доработать)
             self.select_point(pos)
@@ -391,15 +383,58 @@ class GraphArea(QGraphicsView):
         if fl:
             super().mousePressEvent(event)
 
+    def can_add_line(self, start_point, end_point):
+        """
+        Проверяет, можно ли добавить линию между двумя точками.
+        Возвращает True, если линия может быть добавлена, иначе False.
+        """
+        try:
+            if start_point is None or end_point is None:
+                return False
+
+            for point, _ in self.points[start_point]:
+                print(point, end_point)
+                if point == end_point:
+                    return False
+
+            return True
+        except Exception as e:
+            for pt in self.points.keys():
+                print(pt)
+            print("fff")
+            print(e)
+            return False
+
     def reverse_edge(self, edge):
         r_edge = GraphEdge(edge.end_v, edge.start_v, edge.weight)
         return r_edge
 
     def add_line(self, start_vertex, end_vertex, weight=1):
         """Добавление нового ребра между двумя вершинами."""
-        edge = GraphEdge(start_vertex, end_vertex, weight)
-        self.scene.addItem(edge)
-        return edge
+        print(start_vertex, end_vertex)
+        try:
+            edge = GraphEdge(start_vertex, end_vertex, weight)
+            self.scene.addItem(edge)
+            print(start_vertex)
+            print(self.points[start_vertex])
+            self.points[start_vertex].append((end_vertex, edge))
+            self.points[end_vertex].append((start_vertex, self.reverse_edge(edge)))
+            self.points.sort_values()
+        except Exception as e:
+            print(e)
+
+    def find_and_add_line(self, start_id, end_id, weight=1):
+        start_vertex = None
+        end_vertex = None
+        for point in self.points.keys():
+            if point.label.toPlainText() == start_id:
+                start_vertex = point
+            if point.label.toPlainText() == end_id:
+                end_vertex = point
+            if not start_vertex is None and not end_vertex is None:
+                if self.can_add_line(start_vertex, end_vertex):
+                    self.add_line(start_vertex, end_vertex, weight)
+                break
 
     def can_add_ellipse(self, new_ellipse):
         # Получаем центр нового элипса в координатах сцены
@@ -420,22 +455,29 @@ class GraphArea(QGraphicsView):
 
         return True
 
-    def add_point(self, pos):
+    def add_point(self, pos, *args):
         """Добавление новой точки (вершины) на сцену."""
-        label = len(self.points) + 1  # Нумерация вершин
-        point_item = LabeledEllipse(pos.x(), pos.y(), self.point_size, self.point_color, label)
-        if self.can_add_ellipse(point_item):
-            self.scene.addItem(point_item)
-            if len(self.points):
-                point_item.label.setPlainText(f"{int(self.points.keys()[-1].label.toPlainText()) + 1}")
-                self.points[point_item] = []
+        print(args)
+        if len(args) == 0:
+            label = len(self.points) + 1  # Нумерация вершин
+            point_item = LabeledEllipse(pos.x(), pos.y(), self.point_size, self.point_color, label)
+            if self.can_add_ellipse(point_item):
+                self.scene.addItem(point_item)
+                if len(self.points):
+                    point_item.label.setPlainText(f"{int(self.points.keys()[-1].label.toPlainText()) + 1}")
+                    self.points[point_item] = []
+                else:
+                    point_item.label.setPlainText("1")
+                    self.points[point_item] = []
+                self.start_point = point_item
             else:
-                point_item.label.setPlainText("1")
-                self.points[point_item] = []
-            self.start_point = point_item
+                del point_item
+                self.select_point(pos)
         else:
-            del point_item
-            self.select_point(pos)
+            point_item = LabeledEllipse(pos["x"], pos["y"], args[0]["size"], hex_to_QColor(args[0]["color"]),
+                                        args[0]["id"])
+            self.scene.addItem(point_item)
+            self.points[point_item] = []
 
     def delete_obj(self, pos):
         """Удаление бъекта на сцене при нажатии на него."""
@@ -460,6 +502,8 @@ class GraphArea(QGraphicsView):
                 del self.points[item]
                 if len(self.points.sorted_keys):
                     self.update_number_on_point()
+                self.start_point = None
+                self.scene.clearSelection()
                 return  # Прерываем обработку, если нашли вершину
 
         # Проверка рёбер
@@ -478,6 +522,8 @@ class GraphArea(QGraphicsView):
                     # Удаляем ссылки на ребра из self.points
                     self._update_points(start_v, end_v)
                     self._update_points(end_v, start_v)
+                    self.start_point = None
+                    self.scene.clearSelection()
                     return  # Прерываем обработку, если удалено ребро
 
     def _update_points(self, from_vertex, to_vertex):
@@ -804,20 +850,18 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 file.write(self.tansform_graph(self.graph_area.points))
 
     def load_graf(self):
-        name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Открыть граф", "", "Graf Files (*.graf)")
+        name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Открыть граф", "")
         if name:
             with open(name, 'r') as file:
                 graph_data = json.load(file)
             convert_points = graph_data["points"]
-            convert_edges = graph_data["edges"]
             # Восстановить граф, используя полученные данные
             self.graph_area.reset_graph()
             for point in convert_points:
-                self.graph_area.add_point(point)
-                self.graph_area.points[point[3]] = []
-            for edge in convert_edges:
-                self.graph_area.add_line(convert_points[edge["start"]], convert_edges[edge["end"]],
-                                         edge["weight"])
+                self.graph_area.add_point(point["pos"], point)
+            for point in convert_points:
+                for link_point in point["link"]:
+                    self.graph_area.find_and_add_line(point["id"], link_point)
 
     def settings(self):
         self.wnd_settings = Settings()  # Создаем экземпляр Settings
