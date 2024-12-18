@@ -1,4 +1,3 @@
-import time
 import sys
 import json
 
@@ -7,7 +6,6 @@ from screeninfo import get_monitors
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
     QGraphicsItem
-from setuptools.extern import names
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -26,9 +24,51 @@ def hex_to_QColor(hex_color):
     return QtGui.QColor(r, g, b)
 
 
-class Settings(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
+class ConfirmationDialog(QtWidgets.QDialog):
+    def __init__(self, reason, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
+        self.reason = reason
+        self.setupUi()
+
+    def setupUi(self):
+        self.setWindowTitle(f"Are you sure {self.reason}?")
+        self.setFixedSize(400, 200)  # Фиксируем размер окна
+
+        label_text = f"Are you sure {self.reason}?"
+        self.label = QtWidgets.QLabel(label_text, self)
+
+        self.yes_button = QtWidgets.QPushButton("YES", self)
+        self.no_button = QtWidgets.QPushButton("NO", self)
+
+        # Размещаем элементы управления с помощью менеджеров компоновки
+        vbox_layout = QtWidgets.QVBoxLayout()
+        hbox_layout = QtWidgets.QHBoxLayout()
+
+        vbox_layout.addWidget(self.label)
+        hbox_layout.addStretch(1)
+        hbox_layout.addWidget(self.yes_button)
+        hbox_layout.addWidget(self.no_button)
+        hbox_layout.addStretch(1)
+
+        vbox_layout.addLayout(hbox_layout)
+        self.setLayout(vbox_layout)
+
+        # Подключаем обработчики событий
+        self.yes_button.clicked.connect(self._yes)
+        self.no_button.clicked.connect(self._no)
+
+    def _yes(self):
+        self.accept()  # Закрывает диалог и возвращает результат
+
+    def _no(self):
+        self.reject()  # Закрывает диалог и возвращает результат
+
+
+class Settings(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
         self.setupUi()
 
     def setupUi(self):
@@ -39,9 +79,11 @@ class Settings(QtWidgets.QWidget):
         self.setStyleSheet("background-color: gray;")
 
 
-class About_program(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
+# ставим QDialog чтобы было модальное окно, оно делает невозможность взаимодействия с другими окнами пока полльзователь не зароет это
+class About_program(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModal(True)  # Устанавливаем модальность окна
         self.setupUi()
 
     def setupUi(self):
@@ -630,6 +672,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
         self.color = "#000000"
         self.graph_area = None
+        self.wnd_about = None
+        self.wnd_settings = None
         self.setupUi()
 
     def setupUi(self):
@@ -744,14 +788,94 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.side_panel = QtWidgets.QFrame()
         self.side_panel.setStyleSheet("background-color: white;")
         self.side_panel.setFixedWidth(int(self.width() * 0.15))  # Ширина боковой панели
-        side_layout = QtWidgets.QVBoxLayout()
-        self.side_panel.setLayout(side_layout)
+        # QSplitter для разделения боковой панели на две части
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
 
-        # Пример: добавляем кнопки для графов в боковой панели
-        self.graph_button1 = QtWidgets.QPushButton("Граф 1")
-        self.graph_button2 = QtWidgets.QPushButton("Граф 2")
-        side_layout.addWidget(self.graph_button1)
-        side_layout.addWidget(self.graph_button2)
+        # Верхняя часть боковой панели (кнопки)
+        top_side_panel = QtWidgets.QWidget()
+        top_side_panel.setStyleSheet("""
+            QFrame{
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+            }
+            QPushButton {
+                background-color: #EAEAEA; /* Светло-серый фон */
+                border: 1px solid #DCDCDC; /* Тонкая светло-серая граница */
+                border-radius: 8px;
+                padding: 12px 8px; /*внутренние отступы */
+                font-size: 15px;
+            }
+            
+            QPushButton:hover {
+                background-color: #007BFF; /* Синий цвет при наведении */
+                color: white; /* Белый текст при наведении */
+                border-color: #0069d9; /* Темнее синий цвет границы при наведении */
+            }
+            
+            QPushButton:pressed {
+                background-color: #0056b3; /* Более тёмный синий при нажатии */
+                border-color: #0047a1; /* Ещё темнее синяя граница при нажатии */
+            }
+
+        """)
+        top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
+
+        # Кнопки для верхней части
+        self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
+        self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
+
+        self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
+        self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
+
+        top_side_layout.addWidget(self.graph_algorithm_bfs)
+        top_side_layout.addWidget(self.graph_algorithm_dfs)
+
+        # Прокручиваемая область для верхней части
+        top_scroll_area = QtWidgets.QScrollArea()
+        top_scroll_area.setWidgetResizable(True)
+        top_scroll_area.setWidget(top_side_panel)
+
+        # Нижняя часть боковой панели (текст с подсказками)
+        bottom_side_panel = QtWidgets.QWidget()
+        bottom_side_panel.setStyleSheet("""
+                    QWidget {
+                        background-color: rgb(200, 200, 250); /* Светло-серый фон */
+                    }
+
+                    QLabel {
+                        color: black; /* Основной текст черный */
+                    }
+
+                    .error {
+                        color: red; /* Ошибки будут красного цвета */
+                    }
+                """)
+        bottom_side_layout = QtWidgets.QVBoxLayout(bottom_side_panel)
+
+        # Текст с подсказками
+        self.hints_label = QtWidgets.QLabel(self)
+        self.hints_label.setWordWrap(True)
+        bottom_side_layout.addWidget(self.hints_label)
+
+        # Добавляем растяжимость, чтобы текст был прижатым к верхнему краю
+        bottom_side_layout.addStretch(1)
+
+        # Прокручиваемая область для нижней части
+        bottom_scroll_area = QtWidgets.QScrollArea()
+        bottom_scroll_area.setWidgetResizable(True)
+        bottom_scroll_area.setWidget(bottom_side_panel)
+
+        # Добавление частей в splitter
+        splitter.addWidget(top_scroll_area)
+        splitter.addWidget(bottom_scroll_area)
+
+        # Установка размеров частей splitter'а
+        splitter.setSizes([int(self.height() * 0.7), int(self.height() * 0.3)])
+
+        # Добавляем splitter в боковую панель
+        side_layout = QtWidgets.QVBoxLayout(self.side_panel)
+        side_layout.addWidget(splitter)
 
         # Добавляем боковую панель в основной layout
         gorizontal_layout.addWidget(self.side_panel)
@@ -759,6 +883,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Создание рабочей зоны
         self.graph_area = GraphArea(self)
         gorizontal_layout.addWidget(self.graph_area)  # Добавляем рабочую зону в layout
+
+        self.switch_move_mode()
 
         # Установка растяжения для боковой панели и рабочей зоны
         # Боковая панель не растягивается, а рабочая зона будет занимать оставшееся пространство
@@ -773,7 +899,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         # Создание меню
         menu_bar = self.menuBar()  # Используем встроенный метод menuBar()
-        file_menu = menu_bar.addMenu("Файл")
+        file_menu = menu_bar.addMenu("File")
 
         # Создание кнопок в выпадающем меню
         self.new_action = QtGui.QAction("New", self)
@@ -817,12 +943,21 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             }
         """)
 
+    def alghoritms(self):
+        text = self.sender().text()
+        if text == "Обход графа в ширину":
+            print(1)
+            self.set_error_hint("ошибочка вышла")
+        elif text == "Обход графа в глубину":
+            print(2)
+            self.set_hints_text("о нет ошибки")
+
     def new_graf(self):
         """Метод для создания нового графа."""
-        # Очистка и сброс текущего графа
-        self.graph_area.reset_graph()
-
-        # name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить граф", "", "Graf Files (*.graf)")
+        dialog = ConfirmationDialog("you want to clear the graph", self)  # Возможно QMessagebox
+        if dialog.exec():
+            # Очистка текущего графа
+            self.graph_area.reset_graph()
 
     def tansform_graph(self, points):
         # трансформирование точек
@@ -864,11 +999,11 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     self.graph_area.find_and_add_line(point["id"], link_point)
 
     def settings(self):
-        self.wnd_settings = Settings()  # Создаем экземпляр Settings
+        self.wnd_settings = Settings(self)  # Создаем экземпляр Settings
         self.wnd_settings.show()  # Используем show() для открытия окна
 
     def about_program(self):
-        self.wnd_about = About_program()  # Создаем экземпляр About_program
+        self.wnd_about = About_program(self)  # Создаем экземпляр About_program
         self.wnd_about.show()  # Используем show() для открытия окна
 
     def choose_custom_color(self):
@@ -885,6 +1020,19 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.color_btn.setStyleSheet(
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
 
+    def set_hints_text(self, text):
+        """Метод для установки текста в область с подсказками."""
+        html_text = f"<p><span style='color: black'>{text}</span></p>"
+        self.hints_label.setText(html_text)
+
+    def set_error_hint(self, error_message):
+        """Метод для добавления ошибки в область с подсказками."""
+        html_text = f"<p><span class='error'>{error_message}</span></p>"  # <p> - абзац <span> - применение стилей
+        self.hints_label.setText(html_text)
+        self.hints_label.setProperty("class", "error")
+        self.hints_label.style().unpolish(self.hints_label)
+        self.hints_label.style().polish(self.hints_label)
+
     def switch_paint_ellipse_mode(self):
         self.paint_line_button.setChecked(False)
         self.erase_button.setChecked(False)
@@ -893,6 +1041,10 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.delete_mode = False
         self.graph_area.move_mode = False
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+        text = """
+            Вы в режиме рисования вершин, нажмите на сцену, чтобы поставить вершину.
+        """
+        self.set_hints_text(text)
 
     def switch_paint_line_mode(self):
         self.graph_area.paint_line_mode = True
@@ -902,6 +1054,11 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_ellipse_button.setChecked(False)
         self.erase_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+        text = """
+            Вы в режиме рисования рёбер, выделите одну вершину нажатием, а затем нажмите на другую вершину.
+            Зажав Ctrl, при выбранной вершине, вы можете нарисовать несколько ребер от неё.
+        """
+        self.set_hints_text(text)
 
     def switch_erase_mode(self):
         self.graph_area.delete_mode = True
@@ -911,6 +1068,11 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_ellipse_button.setChecked(False)
         self.paint_line_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+        text = """
+            Вы в режиме удаления, нажмите на объект, чтобы удалить его.
+            (На вершину или ближе к середине ребра).
+        """
+        self.set_hints_text(text)
 
     def switch_move_mode(self):
         if not (
@@ -922,6 +1084,11 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
+            text = """
+                Вы в режиме передвижения и выбора.
+                Зажав Ctrl вы сможете выбрать сразу несколько вершин.
+            """
+            self.set_hints_text(text)
 
     def choose_background(self):
         """Переключение сетки на графе."""
