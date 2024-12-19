@@ -1,4 +1,6 @@
 import sys
+import os
+import subprocess
 import json
 
 from screeninfo import get_monitors
@@ -921,14 +923,46 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             }
         """)
 
+    def _create_adjacency_matrix(self, graph_points):
+        # Шаг 1: Присваиваем каждой вершине уникальный индекс
+        vertex_to_index = {v: i for i, v in enumerate(graph_points)}
+
+        # Шаг 2: Создаем пустую матрицу смежности
+        num_vertices = len(vertex_to_index)
+        adjacency_matrix = [[0] * num_vertices for _ in range(num_vertices)]
+
+        # Шаг 3: Заполнение матрицы смежности
+        for vertex, edges in graph_points.items():
+            u = vertex_to_index[vertex]
+            for pt, edge in edges:
+                v = vertex_to_index[pt]
+                adjacency_matrix[u][v] = 1
+
+        return adjacency_matrix
+
     def alghoritms(self):
         text = self.sender().text()
-        if text == "Обход графа в ширину":
-            print(1)
-            self.set_error_hint("ошибочка вышла")
-        elif text == "Обход графа в глубину":
-            print(2)
-            self.set_hints_text("о нет ошибки")
+        if len(self.graph_area.points):
+            if text == "Обход графа в ширину":
+                try:
+                    input_data = json.dumps(self._create_adjacency_matrix(self.graph_area.points))
+                    subprocess.run(["python", "BFS.py", input_data])
+                except Exception as e:
+                    print("ggg")
+                    self.set_error_hint(e)
+            elif text == "Обход графа в глубину":
+                print(2)
+                self.set_hints_text("о нет ошибки")
+
+            try:
+                # Читаем результат из файла output.txt
+                with open("output.txt", "r") as f:
+                    result = f.read()
+
+                print(result)
+            except Exception as e:
+                print("fff")
+                self.set_error_hint(e)
 
     def new_graf(self):
         """Метод для создания нового графа."""
@@ -1020,8 +1054,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.move_mode = False
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
         text = """
-            Вы в режиме рисования вершин, нажмите на сцену, чтобы поставить вершину.
-        """
+                Вы в режиме рисования вершин, нажмите на сцену, чтобы поставить вершину.
+            """
         self.set_hints_text(text)
 
     def switch_paint_line_mode(self):
@@ -1033,9 +1067,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.erase_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
         text = """
-            Вы в режиме рисования рёбер, выделите одну вершину нажатием, а затем нажмите на другую вершину.
-            Зажав Ctrl, при выбранной вершине, вы можете нарисовать несколько ребер от неё.
-        """
+                Вы в режиме рисования рёбер, выделите одну вершину нажатием, а затем нажмите на другую вершину.
+                Зажав Ctrl, при выбранной вершине, вы можете нарисовать несколько ребер от неё.
+            """
         self.set_hints_text(text)
 
     def switch_erase_mode(self):
@@ -1047,9 +1081,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_line_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
         text = """
-            Вы в режиме удаления, нажмите на объект, чтобы удалить его.
-            (На вершину или ближе к середине ребра).
-        """
+                Вы в режиме удаления, нажмите на объект, чтобы удалить его.
+                (На вершину или ближе к середине ребра).
+            """
         self.set_hints_text(text)
 
     def switch_move_mode(self):
@@ -1063,9 +1097,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
             text = """
-                Вы в режиме передвижения и выбора.
-                Зажав Ctrl вы сможете выбрать сразу несколько вершин.
-            """
+                    Вы в режиме передвижения и выбора.
+                    Зажав Ctrl вы сможете выбрать сразу несколько вершин.
+                """
             self.set_hints_text(text)
 
     def choose_background(self):
