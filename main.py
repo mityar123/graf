@@ -1,7 +1,9 @@
 import sys
-import os
-import subprocess
+# import os
+# import subprocess
 import json
+
+from collections import deque
 
 from screeninfo import get_monitors
 
@@ -124,6 +126,31 @@ class About_program(QtWidgets.QDialog):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
+class Algorithms:
+    def __init__(self, orientation=False, weighted=False):
+        self.orientation = orientation
+        self.weighted = weighted
+
+    def BFS(self, graph, start_vertex):
+        # Создаем очередь для хранения вершин, которые нужно посетить
+        queue = deque()
+        queue.append(start_vertex)
+
+        # Массив для отслеживания посещенных вершин
+        visited = [False] * len(graph)
+        visited[start_vertex] = True
+
+        while queue:
+            current_vertex = queue.popleft()
+
+            print(f"Визит в вершину {current_vertex + 1}")
+
+            for i in range(len(graph[current_vertex])):
+                if not visited[i] and graph[current_vertex][i]:
+                    visited[i] = True
+                    queue.append(i)
+
+
 class SortedPointDict:
     def __init__(self):
         self.data = {}  # Основной словарь {точка: [[связанная точка, рёро которым связано], ...] ...}
@@ -166,19 +193,6 @@ class SortedPointDict:
 
     def items(self):
         return [(point, self.data[point]) for point in self.sorted_keys]
-
-    # def change_key(self, old_point, new_point):
-    #    """Изменение ключа (точки) в словаре. (подмена на новую с сохранением значений)"""
-    #    if old_point not in self.data:
-    #        raise KeyError(f"Point '{old_point}' not found")
-    #    if new_point in self.data:
-    #        raise KeyError(f"Point '{new_point}' already exists")
-    #
-    #    # Перемещаем значение и обновляем ключ
-    #    self.data[new_point] = self.data.pop(old_point)
-    #    self.sorted_keys.remove(old_point)
-    #    self.sorted_keys.append(new_point)
-    #    self.sort_keys()
 
     def sort_keys(self):
         """Сортировка точек по метке."""
@@ -674,6 +688,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
         self.color = "#000000"
         self.graph_area = None
+        self.alg = Algorithms()
         self.wnd_about = None
         self.wnd_settings = None
         self.setupUi()
@@ -945,24 +960,14 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         if len(self.graph_area.points):
             if text == "Обход графа в ширину":
                 try:
-                    input_data = json.dumps(self._create_adjacency_matrix(self.graph_area.points))
-                    subprocess.run(["python", "BFS.py", input_data])
+                    input_data = self._create_adjacency_matrix(self.graph_area.points)
+                    print(input_data)
+                    result = self.alg.BFS(input_data, 1)
                 except Exception as e:
-                    print("ggg")
                     self.set_error_hint(e)
             elif text == "Обход графа в глубину":
                 print(2)
                 self.set_hints_text("о нет ошибки")
-
-            try:
-                # Читаем результат из файла output.txt
-                with open("output.txt", "r") as f:
-                    result = f.read()
-
-                print(result)
-            except Exception as e:
-                print("fff")
-                self.set_error_hint(e)
 
     def new_graf(self):
         """Метод для создания нового графа."""
