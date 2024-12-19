@@ -787,38 +787,15 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Создание боковой панели
         self.side_panel = QtWidgets.QFrame()
         self.side_panel.setStyleSheet("background-color: white;")
-        self.side_panel.setFixedWidth(int(self.width() * 0.15))  # Ширина боковой панели
+        self.side_panel_size = int(self.width() * 0.15)
+        self.side_panel.setFixedWidth(self.side_panel_size)  # Ширина боковой панели
         # QSplitter для разделения боковой панели на две части
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
 
         # Верхняя часть боковой панели (кнопки)
         top_side_panel = QtWidgets.QWidget()
-        top_side_panel.setStyleSheet("""
-            QFrame{
-                background-color: white;
-                border-radius: 10px;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
-            }
-            QPushButton {
-                background-color: #EAEAEA; /* Светло-серый фон */
-                border: 1px solid #DCDCDC; /* Тонкая светло-серая граница */
-                border-radius: 8px;
-                padding: 12px 8px; /*внутренние отступы */
-                font-size: 15px;
-            }
-            
-            QPushButton:hover {
-                background-color: #007BFF; /* Синий цвет при наведении */
-                color: white; /* Белый текст при наведении */
-                border-color: #0069d9; /* Темнее синий цвет границы при наведении */
-            }
-            
-            QPushButton:pressed {
-                background-color: #0056b3; /* Более тёмный синий при нажатии */
-                border-color: #0047a1; /* Ещё темнее синяя граница при нажатии */
-            }
-
-        """)
+        top_side_panel_style = "QFrame{" + f"background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);" + "}" + "QPushButton{" + f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px; padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;" + "}" + "QPushButton:hover{" + f"background-color: #007BFF; color: white; border-color: #0069d9;" + "}" + "QPushButton:pressed{" + f"background-color: #0056b3; border-color: #0047a1;" + "}"
+        top_side_panel.setStyleSheet(top_side_panel_style)
         top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
 
         # Кнопки для верхней части
@@ -838,6 +815,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         # Нижняя часть боковой панели (текст с подсказками)
         bottom_side_panel = QtWidgets.QWidget()
+        bottom_side_panel_style = None
         bottom_side_panel.setStyleSheet("""
                     QWidget {
                         background-color: rgb(200, 200, 250); /* Светло-серый фон */
