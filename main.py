@@ -127,7 +127,8 @@ class About_program(QtWidgets.QDialog):
 
 
 class Algorithms:
-    def __init__(self, orientation=False, weighted=False):
+    def __init__(self, parent=None, orientation=False, weighted=False):
+        self.parent = parent
         self.orientation = orientation
         self.weighted = weighted
 
@@ -143,12 +144,26 @@ class Algorithms:
         while queue:
             current_vertex = queue.popleft()
 
-            print(f"Визит в вершину {current_vertex + 1}")
+            self.parent.add_hints_text(f"Визит в вершину {current_vertex + 1}", "\n")
 
             for i in range(len(graph[current_vertex])):
                 if not visited[i] and graph[current_vertex][i]:
                     visited[i] = True
                     queue.append(i)
+
+    def DFS(self, graph, start_vertex):
+        """Обход графа в глубину (DFS)."""
+
+        def dfs_recursive(vertex, visited):
+            visited[vertex] = True
+            self.parent.add_hints_text(f"Визит в вершину {vertex + 1}", "\n")
+
+            for i in range(len(graph[vertex])):
+                if not visited[i] and graph[vertex][i]:
+                    dfs_recursive(i, visited)
+
+        visited = [False] * len(graph)
+        dfs_recursive(start_vertex, visited)
 
 
 class SortedPointDict:
@@ -347,6 +362,7 @@ class GraphEdge(QGraphicsLineItem):
 class GraphArea(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.parent = parent
 
         # Создаем сцену с очень большим sceneRect
         self.scene = QGraphicsScene(self)
@@ -385,6 +401,7 @@ class GraphArea(QGraphicsView):
         self.paint_ellipse_mode = False
         self.paint_line_mode = False
         self.delete_mode = False
+        self.choise_mode = False
 
     def draw_grid(self):
         pass
@@ -398,11 +415,22 @@ class GraphArea(QGraphicsView):
 
     def mousePressEvent(self, event):
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
-        print(self.points)
         fl = 1
         pos = self.mapToScene(event.position().toPoint())
 
-        if self.paint_line_mode and self.start_point is not None and (
+        if self.choise_mode:
+            for item in self.scene.items(pos):
+                if isinstance(item, QGraphicsEllipseItem):
+                    self.start_point = item
+                    item.setSelected(True)
+                    # Завершаем локальный цикл выбора, если он активен
+                    if self.parent.choice_event_loop is not None:
+                        self.parent.choice_event_loop.exit()
+                    break
+            else:
+                self.parent.set_hints_text("Вы не выбрали вершину, попробуйте снова")
+
+        elif self.paint_line_mode and self.start_point is not None and (
                 event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
             fl = 0
             items = self.scene.items(pos)
@@ -451,16 +479,11 @@ class GraphArea(QGraphicsView):
                 return False
 
             for point, _ in self.points[start_point]:
-                print(point, end_point)
                 if point == end_point:
                     return False
 
             return True
         except Exception as e:
-            for pt in self.points.keys():
-                print(pt)
-            print("fff")
-            print(e)
             return False
 
     def reverse_edge(self, edge):
@@ -469,17 +492,14 @@ class GraphArea(QGraphicsView):
 
     def add_line(self, start_vertex, end_vertex, weight=1):
         """Добавление нового ребра между двумя вершинами."""
-        print(start_vertex, end_vertex)
         try:
             edge = GraphEdge(start_vertex, end_vertex, weight)
             self.scene.addItem(edge)
-            print(start_vertex)
-            print(self.points[start_vertex])
             self.points[start_vertex].append((end_vertex, edge))
             self.points[end_vertex].append((start_vertex, self.reverse_edge(edge)))
             self.points.sort_values()
         except Exception as e:
-            print(e)
+            pass
 
     def find_and_add_line(self, start_id, end_id, weight=1):
         start_vertex = None
@@ -515,7 +535,6 @@ class GraphArea(QGraphicsView):
 
     def add_point(self, pos, *args):
         """Добавление новой точки (вершины) на сцену."""
-        print(args)
         if len(args) == 0:
             label = len(self.points) + 1  # Нумерация вершин
             point_item = LabeledEllipse(pos.x(), pos.y(), self.point_size, self.point_color, label)
@@ -575,7 +594,6 @@ class GraphArea(QGraphicsView):
                     start_v = item.start_v
                     end_v = item.end_v
                     self.scene.removeItem(item)
-                    print(f"Удалена линия: {start_v} -> {end_v}")
 
                     # Удаляем ссылки на ребра из self.points
                     self._update_points(start_v, end_v)
@@ -593,7 +611,6 @@ class GraphArea(QGraphicsView):
 
         for edge in edges_to_remove:
             self.points[from_vertex].remove(edge)
-            print(f"Удалена связь: {edge} из {from_vertex}")
 
     def _distance_from_point_to_line(self, point, line, end_threshold=10):
         """
@@ -671,6 +688,8 @@ class GraphArea(QGraphicsView):
 
     def reset_graph(self):
         """Очистка сцены."""
+        self.start_point = None
+        self.scene.clearSelection()
         self.scene.clear()
         self.points.clear()
 
@@ -688,7 +707,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
         self.color = "#000000"
         self.graph_area = None
-        self.alg = Algorithms()
+        self.alg = Algorithms(self)
         self.wnd_about = None
         self.wnd_settings = None
         self.setupUi()
@@ -953,21 +972,51 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 v = vertex_to_index[pt]
                 adjacency_matrix[u][v] = 1
 
-        return adjacency_matrix
+        return adjacency_matrix, vertex_to_index
+
+    def choise_start(self):
+        self.graph_area.start_point = None
+        self.graph_area.scene.clearSelection()
+        self.set_hints_text("Выберите вершину с которой начнётся обход")
+        self.graph_area.choise_mode = True
+        self.graph_area.paint_line_mode = False
+        self.graph_area.paint_ellipse_mode = False
+        self.graph_area.delete_mode = False
+        self.graph_area.move_mode = False
+        self.paint_ellipse_button.setChecked(False)
+        self.paint_line_button.setChecked(False)
+        self.erase_button.setChecked(False)
+        self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
+
+        # Создаём локальный цикл событий и запускаем его
+        self.choice_event_loop = QtCore.QEventLoop()
+        self.choice_event_loop.exec()
+
+        # После завершения цикла проверяем выбор
+        if self.graph_area.start_point is None:
+            self.set_hints_text("Вы не выбрали вершину. Попробуйте снова.")
+        else:
+            self.set_hints_text(f"Выбрана вершина: {self.graph_area.start_point.label.toPlainText()}")
 
     def alghoritms(self):
         text = self.sender().text()
         if len(self.graph_area.points):
             if text == "Обход графа в ширину":
                 try:
-                    input_data = self._create_adjacency_matrix(self.graph_area.points)
-                    print(input_data)
-                    result = self.alg.BFS(input_data, 1)
+                    self.choise_start()
+                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point])
                 except Exception as e:
                     self.set_error_hint(e)
             elif text == "Обход графа в глубину":
-                print(2)
-                self.set_hints_text("о нет ошибки")
+                try:
+                    self.choise_start()
+                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point])
+                except Exception as e:
+                    self.set_error_hint(e)
+        self.graph_area.choise_mode = False
+        self.switch_move_mode(True)
 
     def new_graf(self):
         """Метод для создания нового графа."""
@@ -987,8 +1036,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 "color": QColor_to_hex(pt.color),
             }
             for pt in points.keys()]
-
-        print(t_points)
 
         data = {
             "points": t_points,
@@ -1042,6 +1089,13 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         html_text = f"<p><span style='color: black'>{text}</span></p>"
         self.hints_label.setText(html_text)
 
+    def add_hints_text(self, text, splitter=None):
+        if splitter is None:
+            self.hints_label.setText(self.hints_label.text()[:-11] + text + "</span></p>")
+        elif splitter == "\n":
+            html_text = f"<p><span style='color: black'>{text}</span></p>"
+            self.hints_label.setText(self.hints_label.text() + html_text)
+
     def set_error_hint(self, error_message):
         """Метод для добавления ошибки в область с подсказками."""
         html_text = f"<p><span class='error'>{error_message}</span></p>"  # <p> - абзац <span> - применение стилей
@@ -1091,7 +1145,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             """
         self.set_hints_text(text)
 
-    def switch_move_mode(self):
+    def switch_move_mode(self, missing_text=False):
         if not (
                 self.erase_button.isChecked() or self.paint_ellipse_button.isChecked() or self.paint_line_button.isChecked()):
             self.graph_area.move_mode = True
@@ -1101,11 +1155,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
-            text = """
-                    Вы в режиме передвижения и выбора.
-                    Зажав Ctrl вы сможете выбрать сразу несколько вершин.
-                """
-            self.set_hints_text(text)
+            if not missing_text:
+                text = """
+                        Вы в режиме передвижения и выбора.
+                        Зажав Ctrl вы сможете выбрать сразу несколько вершин.
+                    """
+                self.set_hints_text(text)
 
     def choose_background(self):
         """Переключение сетки на графе."""
