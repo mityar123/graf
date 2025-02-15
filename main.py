@@ -5,6 +5,9 @@ import json
 
 from collections import deque
 
+from PyQt5.QtGui import QContextMenuEvent
+from audit import AUDIT_FILTER_EXCLUDE
+from matplotlib.backend_bases import MouseButton
 from screeninfo import get_monitors
 
 from PyQt6 import QtWidgets, QtGui, QtCore
@@ -266,6 +269,36 @@ class LabeledEllipse(QGraphicsEllipseItem):
 
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
+    def contextMenuEvent(self, event):
+        """Контекстное меню для вершины."""
+        menu = QtWidgets.QMenu()
+
+        # Действие для изменения цвета вершины
+        change_color_action = menu.addAction("Изменить цвет")
+        change_color_action.triggered.connect(self.change_color)
+
+        # Действие для изменения размера вершины
+        change_size_action = menu.addAction("Изменить размер")
+        change_size_action.triggered.connect(self.change_size)
+
+        # Показать меню
+        menu.exec(event.screenPos())
+
+    def change_color(self):
+        """Изменение цвета вершины."""
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            self.setBrush(QtGui.QBrush(color))
+            self.update_text_color()
+
+    def change_size(self):
+        """Изменение размера вершины."""
+        new_size, ok = QtWidgets.QInputDialog.getInt(
+            None, "Изменить размер", "Введите новый размер:", int(self.rect().width()), 5, 50
+        )
+        if ok:
+            self.set_size(new_size)
+
     # def paint(self, painter, option, widget):
     #     # Проверяем, выбран ли элемент
     #     if self.isSelected():
@@ -342,6 +375,35 @@ class GraphEdge(QGraphicsLineItem):
         self.start_v.signals.positionChanged.connect(self.update_position)
         self.end_v.signals.positionChanged.connect(self.update_position)
 
+    def contextMenuEvent(self, event):
+        """Контекстное меню для ребра."""
+        menu = QtWidgets.QMenu()
+
+        # Действие для изменения цвета ребра
+        change_color_action = menu.addAction("Изменить цвет")
+        change_color_action.triggered.connect(self.change_color)
+
+        # Действие для изменения веса ребра
+        change_weight_action = menu.addAction("Изменить вес")
+        change_weight_action.triggered.connect(self.change_weight)
+
+        # Показать меню
+        menu.exec(event.screenPos())
+
+    def change_color(self):
+        """Изменение цвета ребра."""
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            self.setPen(QtGui.QPen(color, 2))
+
+    def change_weight(self):
+        """Изменение веса ребра."""
+        new_weight, ok = QtWidgets.QInputDialog.getInt(
+            None, "Изменить вес", "Введите новый вес:", self.weight, 0, 100
+        )
+        if ok:
+            self.set_weight(new_weight)
+
     def update_position(self):
         """Обновить положение линии и текста при перемещении вершин."""
         line = QtCore.QLineF(self.start_v.scenePos(), self.end_v.scenePos())
@@ -402,6 +464,7 @@ class GraphArea(QGraphicsView):
         self.paint_line_mode = False
         self.delete_mode = False
         self.choise_mode = False
+        self.tools_mode = False
 
     def draw_grid(self):
         pass
@@ -413,61 +476,83 @@ class GraphArea(QGraphicsView):
         else:
             self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
 
+    def contextMenuEvent(self, event):
+        """Обработка контекстного меню для сцены."""
+        pos = self.mapToScene(event.pos())
+        items = self.scene.items(pos)
+
+        if items:
+            # Создаем событие QGraphicsSceneContextMenuEvent
+            scene_event = QtGui.QContextMenuEvent(pos=pos)
+            #scene_event.setPos(pos)
+            print(scene_event.pos())
+            scene_event.setReason(QtWidgets.QGraphicsSceneContextMenuEvent.Reason.Mouse)
+
+            # Передаем событие первому элементу под курсором
+            items[0].contextMenuEvent(scene_event)
+        else:
+            super().contextMenuEvent(event)
+
     def mousePressEvent(self, event):
         """Обработка нажатия мыши для добавления, удаления или выбора точек."""
-        fl = 1
         pos = self.mapToScene(event.position().toPoint())
+        but = event.button()
 
-        if self.choise_mode:
-            for item in self.scene.items(pos):
-                if isinstance(item, QGraphicsEllipseItem):
-                    self.start_point = item
-                    item.setSelected(True)
-                    # Завершаем локальный цикл выбора, если он активен
-                    if self.parent.choice_event_loop is not None:
-                        self.parent.choice_event_loop.exit()
-                    break
-            else:
-                self.parent.set_hints_text("Вы не выбрали вершину, попробуйте снова")
+        if but == QtCore.Qt.MouseButton.LeftButton:
+            fl = 1
 
-        elif self.paint_line_mode and self.start_point is not None and (
-                event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
-            fl = 0
-            items = self.scene.items(pos)
-            for item in items:
-                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                    if self.can_add_line(self.start_point, item):
-                        self.add_line(self.start_point, item)
+            if self.choise_mode:
+                for item in self.scene.items(pos):
+                    if isinstance(item, QGraphicsEllipseItem):
+                        self.start_point = item
+                        item.setSelected(True)
+                        # Завершаем локальный цикл выбора, если он активен
+                        if self.parent.choice_event_loop is not None:
+                            self.parent.choice_event_loop.exit()
                         break
+                else:
+                    self.parent.set_hints_text("Вы не выбрали вершину, попробуйте снова")
 
-        elif self.paint_line_mode and self.start_point is not None:
-            fl = 0
-            items = self.scene.items(pos)
-            for item in items:
-                if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
-                    if self.can_add_line(self.start_point, item):
-                        self.add_line(self.start_point, item)
-                        break
-            self.start_point = None
-            self.scene.clearSelection()
+            elif self.paint_line_mode and self.start_point is not None and (
+                    event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
+                fl = 0
+                items = self.scene.items(pos)
+                for item in items:
+                    if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                        if self.can_add_line(self.start_point, item):
+                            self.add_line(self.start_point, item)
+                            break
 
-        elif self.paint_line_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
-            self.select_point(pos)
+            elif self.paint_line_mode and self.start_point is not None:
+                fl = 0
+                items = self.scene.items(pos)
+                for item in items:
+                    if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
+                        if self.can_add_line(self.start_point, item):
+                            self.add_line(self.start_point, item)
+                            break
+                self.start_point = None
+                self.scene.clearSelection()
 
-        elif self.paint_ellipse_mode:
-            # Добавление новой точки
-            self.add_point(pos)
+            elif self.paint_line_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
+                self.select_point(pos)
 
-        elif self.delete_mode:
-            # Удаление точки при нажатии
-            self.delete_obj(pos)
+            elif self.paint_ellipse_mode:
+                # Добавление новой точки
+                self.add_point(pos)
 
-        elif self.move_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
-            # Логика перемещения (можно доработать)
-            self.select_point(pos)
+            elif self.delete_mode:
+                # Удаление точки при нажатии
+                self.delete_obj(pos)
 
-        if fl:
-            super().mousePressEvent(event)
+            elif self.move_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
+                # Логика перемещения (можно доработать)
+                self.select_point(pos)
+
+            if fl:
+                super().mousePressEvent(event)
+        elif but == QtCore.Qt.MouseButton.RightButton:
+            pass
 
     def can_add_line(self, start_point, end_point):
         """
@@ -762,9 +847,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.tool_panel_layout.setSpacing(0)
 
         # Кнопка "Инструменты"
-        self.tools_button = SvgButton("tools-solid.svg")
-        self.tools_button.setFixedWidth(int(monitor_width * 0.03))
-        self.tool_panel_layout.addWidget(self.tools_button)
+        # self.tools_button = SvgButton("tools-solid.svg")
+        # self.tools_button.setFixedWidth(int(monitor_width * 0.03))
+        # self.tools_button.setCheckable(True)
+        # self.tools_button.clicked.connect(self.swith_tools_mode)
+        # self.tools_button.clicked.connect(self.switch_move_mode)
+        # self.tool_panel_layout.addWidget(self.tools_button)
 
         # Кнопка рисования кругов
         self.paint_ellipse_button = SvgButton("circle-solid.svg")
@@ -1144,6 +1232,16 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 (На вершину или ближе к середине ребра).
             """
         self.set_hints_text(text)
+
+    # def swith_tools_mode(self): если вернуть, то дополнить остальные
+    #     self.graph_area.tools_mode = True
+    #     self.graph_area.delete_mode = False
+    #     self.graph_area.paint_ellipse_mode = False
+    #     self.graph_area.paint_line_mode = False
+    #     self.graph_area.move_mode = False
+    #     self.paint_ellipse_button.setChecked(False)
+    #     self.paint_line_button.setChecked(False)
+    #     self.tools_button.setChecked(False)
 
     def switch_move_mode(self, missing_text=False):
         if not (
