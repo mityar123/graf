@@ -4,10 +4,8 @@ import sys
 import json
 
 from collections import deque
+from types import NoneType
 
-from PyQt5.QtGui import QContextMenuEvent
-from audit import AUDIT_FILTER_EXCLUDE
-from matplotlib.backend_bases import MouseButton
 from screeninfo import get_monitors
 
 from PyQt6 import QtWidgets, QtGui, QtCore
@@ -269,7 +267,7 @@ class LabeledEllipse(QGraphicsEllipseItem):
 
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
-    def contextMenuEvent(self, event):
+    def config_menu(self, pos):
         """Контекстное меню для вершины."""
         menu = QtWidgets.QMenu()
 
@@ -282,7 +280,7 @@ class LabeledEllipse(QGraphicsEllipseItem):
         change_size_action.triggered.connect(self.change_size)
 
         # Показать меню
-        menu.exec(event.screenPos())
+        menu.exec(pos)
 
     def change_color(self):
         """Изменение цвета вершины."""
@@ -375,7 +373,7 @@ class GraphEdge(QGraphicsLineItem):
         self.start_v.signals.positionChanged.connect(self.update_position)
         self.end_v.signals.positionChanged.connect(self.update_position)
 
-    def contextMenuEvent(self, event):
+    def config_menu(self, pos):
         """Контекстное меню для ребра."""
         menu = QtWidgets.QMenu()
 
@@ -388,7 +386,7 @@ class GraphEdge(QGraphicsLineItem):
         change_weight_action.triggered.connect(self.change_weight)
 
         # Показать меню
-        menu.exec(event.screenPos())
+        menu.exec(pos)
 
     def change_color(self):
         """Изменение цвета ребра."""
@@ -409,9 +407,23 @@ class GraphEdge(QGraphicsLineItem):
         line = QtCore.QLineF(self.start_v.scenePos(), self.end_v.scenePos())
         self.setLine(line)
 
-        text_position = line.pointAt(0.5)  # 0 - начало, 1 - конец
-        self.label.setPos(text_position - QtCore.QPointF(self.label.boundingRect().width() / 2,
-                                                         self.label.boundingRect().height() / 2))
+        # Позиция текста (середина линии)
+        text_position = line.pointAt(0.5)
+
+        # Угол наклона линии
+        angle = line.angle()
+
+        # Поворачиваем текст на угол линии
+        self.label.setRotation(-angle + 180)  # Отрицательный угол, так как Qt использует обратное направление
+
+        # Смещаем текст в сторону, чтобы он не перекрывал линию
+        offset = 5  # Смещение от линии
+        normal_vector = line.normalVector().unitVector()  # Нормальный вектор к линии
+        offset_vector = QtCore.QPointF(normal_vector.dx() * offset, normal_vector.dy() * offset)
+
+        # Устанавливаем позицию текста
+        self.label.setPos(text_position + offset_vector - QtCore.QPointF(self.label.boundingRect().width() / 2,
+                                                                       self.label.boundingRect().height() / 2))
 
         self.update()
 
@@ -478,24 +490,27 @@ class GraphArea(QGraphicsView):
 
     def contextMenuEvent(self, event):
         """Handle context menu events in the graph area."""
-        pos = self.mapToScene(event.pos())
+        pos = self.mapToScene(event.pos())  # Преобразуем координаты в систему координат сцены
         items = self.scene.items(pos)
         print(items)
+        activ_item = None
+        for x in items:
+            if isinstance(x, LabeledEllipse):
+                activ_item = x
+        else:
+            threshold = 4  # Пороговое расстояние для удаления линии
+            # Проверка линий на близость к месту клика
+            for item in self.scene.items():
+                if isinstance(item, QGraphicsLineItem):
+                    line = item.line()
+                    dist = self._distance_from_point_to_line(pos, line)
+                    if dist <= threshold:  # Проверяем расстояние
+                        activ_item = item
 
-        if items:
-            # Create a context menu
-            menu = QtWidgets.QMenu(self)
-
-            # Add actions to the menu
-            change_color_action = menu.addAction("Change Color")
-            change_size_action = menu.addAction("Change Size")
-
-            # Connect actions to slots
-            change_color_action.triggered.connect(lambda: items[1].change_color())
-            change_size_action.triggered.connect(lambda: items[1].change_size())
-
-            # Show the menu at the cursor position
-            menu.exec(event.globalPos())
+        if activ_item is not None:
+            # Преобразуем координаты в глобальные
+            global_pos = self.mapToGlobal(event.pos())
+            activ_item.config_menu(global_pos)  # Передаем глобальные координаты
         else:
             super().contextMenuEvent(event)
 
