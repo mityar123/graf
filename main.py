@@ -477,19 +477,25 @@ class GraphArea(QGraphicsView):
             self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
 
     def contextMenuEvent(self, event):
-        """Обработка контекстного меню для сцены."""
+        """Handle context menu events in the graph area."""
         pos = self.mapToScene(event.pos())
         items = self.scene.items(pos)
+        print(items)
 
         if items:
-            # Создаем событие QGraphicsSceneContextMenuEvent
-            scene_event = QtGui.QContextMenuEvent(pos=pos)
-            #scene_event.setPos(pos)
-            print(scene_event.pos())
-            scene_event.setReason(QtWidgets.QGraphicsSceneContextMenuEvent.Reason.Mouse)
+            # Create a context menu
+            menu = QtWidgets.QMenu(self)
 
-            # Передаем событие первому элементу под курсором
-            items[0].contextMenuEvent(scene_event)
+            # Add actions to the menu
+            change_color_action = menu.addAction("Change Color")
+            change_size_action = menu.addAction("Change Size")
+
+            # Connect actions to slots
+            change_color_action.triggered.connect(lambda: items[1].change_color())
+            change_size_action.triggered.connect(lambda: items[1].change_size())
+
+            # Show the menu at the cursor position
+            menu.exec(event.globalPos())
         else:
             super().contextMenuEvent(event)
 
