@@ -126,6 +126,28 @@ class About_program(QtWidgets.QDialog):
         except Exception as e:
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
+class CustomGraphicsScene(QGraphicsScene):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def mousePressEvent(self, event):
+        """Переопределяем метод mousePressEvent для выбора только верхнего элемента."""
+        pos = event.scenePos()
+        items = self.items(pos, order=QtCore.Qt.SortOrder.DescendingOrder)  # Сортируем элементы сверху вниз
+
+        # Отключаем выбор для всех элементов
+        for item in items:
+            item.setSelected(False)
+
+        # Выбираем только верхний элемент
+        if items:
+            top_item = items[0]
+            if isinstance(top_item, (QGraphicsEllipseItem, QGraphicsLineItem)):
+                top_item.setSelected(True)
+
+        # Передаем событие дальше
+        super().mousePressEvent(event)
+
 
 class Algorithms:
     def __init__(self, parent=None, orientation=False, weighted=False):
@@ -439,7 +461,8 @@ class GraphArea(QGraphicsView):
         self.parent = parent
 
         # Создаем сцену с очень большим sceneRect
-        self.scene = QGraphicsScene(self)
+        # Создаем кастомную сцену
+        self.scene = CustomGraphicsScene(self)
         infinite_size = 10 ** 6  # Задаем большой размер
         self.scene.setSceneRect(-infinite_size, -infinite_size, 2 * infinite_size, 2 * infinite_size)
         self.setScene(self.scene)
@@ -492,7 +515,6 @@ class GraphArea(QGraphicsView):
         """Handle context menu events in the graph area."""
         pos = self.mapToScene(event.pos())  # Преобразуем координаты в систему координат сцены
         items = self.scene.items(pos)
-        print(items)
         activ_item = None
         for x in items:
             if isinstance(x, LabeledEllipse):
@@ -522,8 +544,22 @@ class GraphArea(QGraphicsView):
         if but == QtCore.Qt.MouseButton.LeftButton:
             fl = 1
 
+            # Получаем все элементы под курсором, отсортированные по z-значению (сверху вниз)
+            items = sorted(self.scene.items(pos), key=lambda x: x.zValue(), reverse=True)
+
+            # Отключаем выбор для всех элементов, кроме верхнего
+            for item in items:
+                if isinstance(item, QGraphicsEllipseItem) or isinstance(item, QGraphicsLineItem):
+                    item.setSelected(False)
+
+            # Выбираем только верхний элемент
+            if items:
+                top_item = items[0]
+                if isinstance(top_item, QGraphicsEllipseItem) or isinstance(top_item, QGraphicsLineItem):
+                    top_item.setSelected(True)
+
             if self.choise_mode:
-                for item in self.scene.items(pos):
+                for item in items:
                     if isinstance(item, QGraphicsEllipseItem):
                         self.start_point = item
                         item.setSelected(True)
@@ -537,7 +573,6 @@ class GraphArea(QGraphicsView):
             elif self.paint_line_mode and self.start_point is not None and (
                     event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
                 fl = 0
-                items = self.scene.items(pos)
                 for item in items:
                     if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
                         if self.can_add_line(self.start_point, item):
@@ -546,7 +581,6 @@ class GraphArea(QGraphicsView):
 
             elif self.paint_line_mode and self.start_point is not None:
                 fl = 0
-                items = self.scene.items(pos)
                 for item in items:
                     if isinstance(item, QGraphicsEllipseItem) and item != self.start_point:
                         if self.can_add_line(self.start_point, item):
