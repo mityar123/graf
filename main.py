@@ -4,9 +4,10 @@ import sys
 import json
 
 from collections import deque
-from types import NoneType
 
 from screeninfo import get_monitors
+import \
+    heapq  # Кучи — это двоичные деревья, в которых каждый родительский узел имеет значение, меньшее или равное значению любого из его дочерних узлов. Мы называем это условие инвариантом кучи.
 
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
@@ -126,6 +127,7 @@ class About_program(QtWidgets.QDialog):
         except Exception as e:
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
+
 class CustomGraphicsScene(QGraphicsScene):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -187,6 +189,85 @@ class Algorithms:
 
         visited = [False] * len(graph)
         dfs_recursive(start_vertex, visited)
+
+    def Dijkstra(self, graph, start):
+        n = len(graph)
+        dist = [float('inf')] * n
+        dist[start] = 0
+        pq = [(0, start)]
+        while pq:
+            d, v = heapq.heappop(pq)
+            if d > dist[v]:
+                continue
+            for u, weight in enumerate(graph[v]):
+                if weight and dist[v] + weight < dist[u]:
+                    dist[u] = dist[v] + weight
+                    heapq.heappush(pq, (dist[u], u))
+        self.parent.add_hints_text(f"Кратчайшие пути: {dist}", "\n")
+
+    def FloydWarshall(self, graph):
+        n = len(graph)
+        dist = [[float('inf')] * n for _ in range(n)]
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    dist[i][j] = 0
+                elif graph[i][j]:
+                    dist[i][j] = graph[i][j]
+        for k in range(n):
+            for i in range(n):
+                for j in range(n):
+                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+        self.parent.add_hints_text(f"Матрица кратчайших путей: {dist}", "\n")
+
+    def Kruskal(self, edges, n):
+        edges.sort(key=lambda x: x[2])
+        parent = list(range(n))
+
+        def find(v):
+            if parent[v] != v:
+                parent[v] = find(parent[v])
+            return parent[v]
+
+        mst = []
+        for u, v, weight in edges:
+            ru, rv = find(u), find(v)
+            if ru != rv:
+                mst.append((u, v, weight))
+                parent[ru] = rv
+        self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
+
+    def Prim(self, graph):
+        n = len(graph)
+        in_mst = [False] * n
+        min_edge = [(float('inf'), -1)] * n
+        min_edge[0] = (0, -1)
+        mst = []
+        for _ in range(n):
+            v = min((w, v) for v, (w, _) in enumerate(min_edge) if not in_mst[v])[1]
+            in_mst[v] = True
+            if min_edge[v][1] != -1:
+                mst.append((min_edge[v][1], v, min_edge[v][0]))
+            for u, weight in enumerate(graph[v]):
+                if weight and not in_mst[u] and weight < min_edge[u][0]:
+                    min_edge[u] = (weight, v)
+        self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
+
+    def Levitan(self, graph, start):
+        n = len(graph)
+        dist = [float('inf')] * n
+        dist[start] = 0
+        queue = deque([start])
+        while queue:
+            v = queue.popleft()
+            for u, weight in enumerate(graph[v]):
+                if weight and dist[u] > dist[v] + weight:
+                    dist[u] = dist[v] + weight
+                    if weight == 1:
+                        queue.appendleft(u)
+                    else:
+                        queue.append(u)
+        self.parent.add_hints_text(f"Кратчайшие пути (Левитан): {dist}", "\n")
 
 
 class SortedPointDict:
@@ -445,7 +526,7 @@ class GraphEdge(QGraphicsLineItem):
 
         # Устанавливаем позицию текста
         self.label.setPos(text_position + offset_vector - QtCore.QPointF(self.label.boundingRect().width() / 2,
-                                                                       self.label.boundingRect().height() / 2))
+                                                                         self.label.boundingRect().height() / 2))
 
         self.update()
 
@@ -980,12 +1061,15 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Кнопки для верхней части
         self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
         self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
+        self.graph_algorithm_dijkstra = QtWidgets.QPushButton("Алгоритм Дейкстра")
 
         self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
         self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
+        self.graph_algorithm_dijkstra.clicked.connect(self.alghoritms)
 
         top_side_layout.addWidget(self.graph_algorithm_bfs)
         top_side_layout.addWidget(self.graph_algorithm_dfs)
+        top_side_layout.addWidget(self.graph_algorithm_dijkstra)
 
         # Прокручиваемая область для верхней части
         top_scroll_area = QtWidgets.QScrollArea()
@@ -1158,6 +1242,14 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point])
                 except Exception as e:
                     self.set_error_hint(e)
+            elif text == "Алгоритм Дейкстра":
+                try:
+                    self.choise_start()
+                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point])
+                except Exception as e:
+                    self.set_error_hint(e)
+
         self.graph_area.choise_mode = False
         self.switch_move_mode(True)
 
