@@ -466,10 +466,19 @@ class GraphEdge(QGraphicsLineItem):
 
         self.setPen(QtGui.QPen(QtGui.QColor(color), 2))
 
+        # Настройка текста
         self.label = QtWidgets.QGraphicsTextItem(self)
         self.label.setDefaultTextColor(QtGui.QColor("#000000"))
+        self.label.setPlainText(str(weight))
 
         self.label.setZValue(1000)
+
+        # Используем моноширинный шрифт для стабильного размера
+        font = QtGui.QFont("Monospace", 10)
+        self.label.setFont(font)
+
+        # Выравниваем текст по центру
+        self.label.setTransformOriginPoint(self.label.boundingRect().center())
 
         self.update_position()
 
@@ -506,34 +515,65 @@ class GraphEdge(QGraphicsLineItem):
             self.set_weight(new_weight)
 
     def update_position(self):
-        """Обновить положение линии и текста при перемещении вершин."""
+        """Обновить положение линии и текста с учётом читаемости"""
         line = QtCore.QLineF(self.start_v.scenePos(), self.end_v.scenePos())
         self.setLine(line)
 
-        # Позиция текста (середина линии)
-        text_position = line.pointAt(0.5)
+        # Центр линии и вектор направления
+        center = line.pointAt(0.5)
+        direction = line.p2() - line.p1()
 
-        # Угол наклона линии
+        # Рассчитываем базовый угол поворота
         angle = line.angle()
 
-        # Поворачиваем текст на угол линии
-        self.label.setRotation(-angle + 180)  # Отрицательный угол, так как Qt использует обратное направление
+        # Определяем главное направление линии
+        is_horizontal = abs(direction.x()) > abs(direction.y())
 
-        # Смещаем текст в сторону, чтобы он не перекрывал линию
-        offset = 5  # Смещение от линии
-        normal_vector = line.normalVector().unitVector()  # Нормальный вектор к линии
-        offset_vector = QtCore.QPointF(normal_vector.dx() * offset, normal_vector.dy() * offset)
+        # Корректируем угол для читаемости
+        if direction.x() < 0:
+            angle += 180 if is_horizontal else 0
+        if direction.y() > 0 and not is_horizontal:
+            angle += 180
 
-        # Устанавливаем позицию текста
-        self.label.setPos(text_position + offset_vector - QtCore.QPointF(self.label.boundingRect().width() / 2,
-                                                                         self.label.boundingRect().height() / 2))
+        # Ограничиваем угол в диапазоне [0, 360)
+        angle %= 360
 
-        self.update()
+        # Автоматическая коррекция для четвертей
+        if 90 < angle < 270:
+            angle = (angle + 180) % 360  # Переворачиваем на 180 градусов
+
+        # Применяем поворот
+        self.label.setRotation(-angle)
+
+        # Рассчитываем смещение относительно нормали
+        offset = 12
+        normal = line.normalVector().unitVector()
+        offset_vector = QtCore.QPointF(
+            normal.dx() * offset,
+            normal.dy() * offset
+        )
+
+        # Корректируем направление смещения
+        if angle > 90 and angle < 270:
+            offset_vector *= -1
+
+        # Позиционирование текста
+        text_rect = self.label.boundingRect()
+        self.label.setTransformOriginPoint(text_rect.center())
+        self.label.setPos(
+            center
+            + offset_vector
+            - QtCore.QPointF(
+                text_rect.width() / 2,
+                text_rect.height() / 2
+            )
+        )
 
     def set_weight(self, weight):
-        """Изменить вес ребра."""
+        """Изменить вес ребра"""
         self.weight = weight
         self.label.setPlainText(str(weight))
+        self.update_position()  # Обновляем позицию после изменения текста
 
 
 class GraphArea(QGraphicsView):
