@@ -192,18 +192,36 @@ class Algorithms:
 
     def Dijkstra(self, graph, start):
         n = len(graph)
-        dist = [float('inf')] * n
-        dist[start] = 0
-        pq = [(0, start)]
+        dist = [float('inf')] * n  # Массив расстояний
+        prev = [None] * n  # Массив предков для восстановления пути
+        dist[start] = 0  # Расстояние до стартовой вершины = 0
+        pq = [(0, start)]  # Очередь с приоритетом
+
         while pq:
-            d, v = heapq.heappop(pq)
+            d, v = heapq.heappop(pq)  # Извлекаем вершину с минимальным расстоянием
             if d > dist[v]:
                 continue
             for u, weight in enumerate(graph[v]):
-                if weight and dist[v] + weight < dist[u]:
+                # Если существует ребро (вес больше 0) и найден более короткий путь
+                if weight > 0 and dist[v] + weight < dist[u]:
                     dist[u] = dist[v] + weight
+                    prev[u] = v  # Запоминаем предка
                     heapq.heappush(pq, (dist[u], u))
-        self.parent.add_hints_text(f"Кратчайшие пути: {dist}", "\n")
+
+        # Выводим кратчайшие пути от начальной вершины до всех остальных
+        for vertex in range(n):
+            if dist[vertex] == float('inf'):
+                self.parent.add_hints_text(f"Нет пути от {start + 1} до {vertex + 1}\n", "\n")
+            else:
+                path = []
+                current = vertex
+                while current is not None:
+                    path.append(current + 1)  # Составляем путь (индексация с 1)
+                    current = prev[current]
+                path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
+                self.parent.add_hints_text(
+                    f"Кратчайший путь от {start + 1} до {vertex + 1}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
+                )
 
     def FloydWarshall(self, graph):
         n = len(graph)
@@ -456,7 +474,7 @@ class LabeledEllipse(QGraphicsEllipseItem):
 class GraphEdge(QGraphicsLineItem):
     """Класс для рёбер графа"""
 
-    def __init__(self, start, end, color, weight=0, parent=None):
+    def __init__(self, start, end, color, weight=1, parent=None):
         super().__init__(parent)
         self.start_v = start
         self.end_v = end
@@ -572,6 +590,10 @@ class GraphEdge(QGraphicsLineItem):
     def set_weight(self, weight):
         """Изменить вес ребра"""
         self.weight = weight
+        links = wnd.graph_area.points[self.end_v]
+        for pt, ed in links:
+            if self.start_v == pt:
+                ed.weight = weight
         self.label.setPlainText(str(weight))
         self.update_position()  # Обновляем позицию после изменения текста
 
@@ -1225,19 +1247,19 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         """)
 
     def _create_adjacency_matrix(self, graph_points):
-        # Шаг 1: Присваиваем каждой вершине уникальный индекс
+        # Присваиваем каждой вершине уникальный индекс
         vertex_to_index = {v: i for i, v in enumerate(graph_points)}
 
-        # Шаг 2: Создаем пустую матрицу смежности
+        # Создаем пустую матрицу смежности
         num_vertices = len(vertex_to_index)
         adjacency_matrix = [[0] * num_vertices for _ in range(num_vertices)]
 
-        # Шаг 3: Заполнение матрицы смежности
+        # Заполнение матрицы смежности
         for vertex, edges in graph_points.items():
             u = vertex_to_index[vertex]
             for pt, edge in edges:
                 v = vertex_to_index[pt]
-                adjacency_matrix[u][v] = 1
+                adjacency_matrix[u][v] = edge.weight
 
         return adjacency_matrix, vertex_to_index
 
@@ -1306,7 +1328,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             {
                 "id": pt.label.toPlainText(),
                 "pos": {"x": pt.pos().x(), "y": pt.pos().y()},
-                "link": [x[0].label.toPlainText() for x in points[pt]],
+                "link": [(x[0].label.toPlainText(), x[1].weight) for x in points[pt]],
                 "size": pt.rect().width(),
                 "color": QColor_to_hex(pt.color),
             }
@@ -1334,8 +1356,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             for point in convert_points:
                 self.graph_area.add_point(point["pos"], point)
             for point in convert_points:
-                for link_point in point["link"]:
-                    self.graph_area.find_and_add_line(point["id"], link_point)
+                for link_point, weight in point["link"]:
+                    self.graph_area.find_and_add_line(point["id"], link_point, weight)
 
     def settings(self):
         self.wnd_settings = Settings(self)  # Создаем экземпляр Settings
