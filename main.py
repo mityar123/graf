@@ -157,7 +157,7 @@ class Algorithms:
         self.orientation = orientation
         self.weighted = weighted
 
-    def BFS(self, graph, start_vertex):
+    def BFS(self, graph, start_vertex, index_to_vertex):
         # Создаем очередь для хранения вершин, которые нужно посетить
         queue = deque()
         queue.append(start_vertex)
@@ -169,19 +169,19 @@ class Algorithms:
         while queue:
             current_vertex = queue.popleft()
 
-            self.parent.add_hints_text(f"Визит в вершину {current_vertex + 1}", "\n")
+            self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[current_vertex].label.toPlainText()}", "\n")
 
             for i in range(len(graph[current_vertex])):
                 if not visited[i] and graph[current_vertex][i]:
                     visited[i] = True
                     queue.append(i)
 
-    def DFS(self, graph, start_vertex):
+    def DFS(self, graph, start_vertex, index_to_vertex):
         """Обход графа в глубину (DFS)."""
 
         def dfs_recursive(vertex, visited):
             visited[vertex] = True
-            self.parent.add_hints_text(f"Визит в вершину {vertex + 1}", "\n")
+            self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[vertex].label.toPlainText()}", "\n")
 
             for i in range(len(graph[vertex])):
                 if not visited[i] and graph[vertex][i]:
@@ -190,7 +190,7 @@ class Algorithms:
         visited = [False] * len(graph)
         dfs_recursive(start_vertex, visited)
 
-    def Dijkstra(self, graph, start):
+    def Dijkstra(self, graph, start, index_to_vertex):
         n = len(graph)
         dist = [float('inf')] * n  # Массив расстояний
         prev = [None] * n  # Массив предков для восстановления пути
@@ -210,18 +210,19 @@ class Algorithms:
 
         # Выводим кратчайшие пути от начальной вершины до всех остальных
         for vertex in range(n):
-            if dist[vertex] == float('inf'):
-                self.parent.add_hints_text(f"Нет пути от {start + 1} до {vertex + 1}\n", "\n")
-            else:
-                path = []
-                current = vertex
-                while current is not None:
-                    path.append(current + 1)  # Составляем путь (индексация с 1)
-                    current = prev[current]
-                path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
-                self.parent.add_hints_text(
-                    f"Кратчайший путь от {start + 1} до {vertex + 1}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
-                )
+            if start != vertex:
+                if dist[vertex] == float('inf'):
+                    self.parent.add_hints_text(f"Нет пути от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}\n", "\n")
+                else:
+                    path = []
+                    current = vertex
+                    while current is not None:
+                        path.append(current + 1)  # Составляем путь (индексация с 1)
+                        current = prev[current]
+                    path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
+                    self.parent.add_hints_text(
+                        f"Кратчайший путь от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
+                    )
 
     def FloydWarshall(self, graph):
         n = len(graph)
@@ -770,13 +771,13 @@ class GraphArea(QGraphicsView):
             return False
 
     def reverse_edge(self, edge):
-        r_edge = GraphEdge(edge.end_v, edge.start_v, edge.weight)
+        r_edge = GraphEdge(edge.end_v, edge.start_v, 1, edge.weight)
         return r_edge
 
     def add_line(self, start_vertex, end_vertex, weight=1):
         """Добавление нового ребра между двумя вершинами."""
         try:
-            edge = GraphEdge(start_vertex, end_vertex, weight)
+            edge = GraphEdge(start_vertex, end_vertex, 0, weight=weight)
             self.scene.addItem(edge)
             self.points[start_vertex].append((end_vertex, edge))
             self.points[end_vertex].append((start_vertex, self.reverse_edge(edge)))
@@ -1116,7 +1117,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         # Верхняя часть боковой панели (кнопки)
         top_side_panel = QtWidgets.QWidget()
-        top_side_panel_style = "QFrame{" + f"background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);" + "}" + "QPushButton{" + f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px; padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;" + "}" + "QPushButton:hover{" + f"background-color: #007BFF; color: white; border-color: #0069d9;" + "}" + "QPushButton:pressed{" + f"background-color: #0056b3; border-color: #0047a1;" + "}"
+        top_side_panel_style = "QFrame{" + f"background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);" + "}" + "QPushButton{" + f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px; padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;" + "}" + "QPushButton:pressed{" + f"background-color: #0056b3; border-color: #0047a1;" + "}"
         top_side_panel.setStyleSheet(top_side_panel_style)
         top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
 
@@ -1124,14 +1125,20 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
         self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
         self.graph_algorithm_dijkstra = QtWidgets.QPushButton("Алгоритм Дейкстра")
+        self.graph_algorithm_fl_yor = QtWidgets.QPushButton("Алгоритм Флойда-Уоршелла")
+        self.graph_algorithm_kruskal = QtWidgets.QPushButton("Алгоритм Крускала")
 
         self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
         self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
         self.graph_algorithm_dijkstra.clicked.connect(self.alghoritms)
+        self.graph_algorithm_fl_yor.clicked.connect(self.alghoritms)
+        self.graph_algorithm_kruskal.clicked.connect(self.alghoritms)
 
         top_side_layout.addWidget(self.graph_algorithm_bfs)
         top_side_layout.addWidget(self.graph_algorithm_dfs)
         top_side_layout.addWidget(self.graph_algorithm_dijkstra)
+        top_side_layout.addWidget(self.graph_algorithm_fl_yor)
+        top_side_layout.addWidget(self.graph_algorithm_kruskal)
 
         # Прокручиваемая область для верхней части
         top_scroll_area = QtWidgets.QScrollArea()
@@ -1250,6 +1257,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         # Присваиваем каждой вершине уникальный индекс
         vertex_to_index = {v: i for i, v in enumerate(graph_points)}
 
+        # Создаем отображение от индекса к вершине
+        index_to_vertex = {i: v for i, v in enumerate(graph_points)}
+
         # Создаем пустую матрицу смежности
         num_vertices = len(vertex_to_index)
         adjacency_matrix = [[0] * num_vertices for _ in range(num_vertices)]
@@ -1261,7 +1271,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 v = vertex_to_index[pt]
                 adjacency_matrix[u][v] = edge.weight
 
-        return adjacency_matrix, vertex_to_index
+        return adjacency_matrix, vertex_to_index, index_to_vertex
 
     def choise_start(self):
         self.graph_area.start_point = None
@@ -1288,27 +1298,42 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.set_hints_text(f"Выбрана вершина: {self.graph_area.start_point.label.toPlainText()}")
 
     def alghoritms(self):
-        text = self.sender().text()
+        sender_but = self.sender()
+        text = sender_but.text()
+        sender_but.repaint()
         if len(self.graph_area.points):
             if text == "Обход графа в ширину":
                 try:
                     self.choise_start()
-                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point])
+                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
                 except Exception as e:
                     self.set_error_hint(e)
             elif text == "Обход графа в глубину":
                 try:
                     self.choise_start()
-                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point])
+                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
                 except Exception as e:
                     self.set_error_hint(e)
             elif text == "Алгоритм Дейкстра":
                 try:
                     self.choise_start()
-                    input_data, vertex_to_index = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point])
+                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
+                except Exception as e:
+                    self.set_error_hint(e)
+            elif text == "Алгоритм Флойда-Уоршелла":
+                try:
+                    self.choise_start()
+                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+                    self.alg.FloydWarshall(input_data)
+                except Exception as e:
+                    self.set_error_hint(e)
+            elif text == "Алгоритм Крускала":
+                try:
+                    self.choise_start()
+                    self.alg.Kruskal()
                 except Exception as e:
                     self.set_error_hint(e)
 
