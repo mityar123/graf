@@ -1,7 +1,10 @@
 import sys
-# import os
-# import subprocess
+import os
+import subprocess
 import json
+
+import shutil
+import importlib.util
 
 from collections import deque
 
@@ -12,6 +15,9 @@ import \
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
     QGraphicsItem
+
+# Папка, где будут храниться алгоритмы
+ALGORITHMS_DIR = "algorithms"
 
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
@@ -69,6 +75,89 @@ class ConfirmationDialog(QtWidgets.QDialog):
 
     def _no(self):
         self.reject()  # Закрывает диалог и возвращает результат
+
+
+class AddAlgorithmDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Добавить алгоритм")
+        self.setFixedSize(400, 300)
+
+        self.config_data = None
+
+        # Создаем элементы формы
+        self.vertices_checkbox = QtWidgets.QCheckBox("Передать количество вершин", self)
+
+        # Радио-кнопки для выбора типа графа (матрица или список смежности)
+        self.adjacency_matrix_radio = QtWidgets.QRadioButton("Передать матрицу смежности", self)
+        self.adjacency_list_radio = QtWidgets.QRadioButton("Передать список смежности", self)
+
+        # Устанавливаем группу для радио кнопок
+        self.adjacency_group = QtWidgets.QButtonGroup(self)
+        self.adjacency_group.addButton(self.adjacency_matrix_radio)
+        self.adjacency_group.addButton(self.adjacency_list_radio)
+
+        # По умолчанию выбираем матрицу смежности
+        self.adjacency_matrix_radio.setChecked(True)
+
+        self.start_point_checkbox = QtWidgets.QCheckBox("Нужна начальная точка", self)
+        self.end_point_checkbox = QtWidgets.QCheckBox("Нужна конечная точка", self)
+
+        # Кнопки
+        self.add_button = QtWidgets.QPushButton("Добавить", self)
+        self.cancel_button = QtWidgets.QPushButton("Отмена", self)
+
+        # Размещаем элементы на форме
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.vertices_checkbox)
+        layout.addWidget(self.adjacency_matrix_radio)
+        layout.addWidget(self.adjacency_list_radio)
+        layout.addWidget(self.start_point_checkbox)
+        layout.addWidget(self.end_point_checkbox)
+
+        buttons_layout = QtWidgets.QHBoxLayout()
+        buttons_layout.addWidget(self.cancel_button)
+        buttons_layout.addWidget(self.add_button)
+        layout.addLayout(buttons_layout)
+
+        # Обработчики событий
+        self.add_button.clicked.connect(self.add_algorithm)
+        self.cancel_button.clicked.connect(self.reject)
+
+    def add_algorithm(self):
+        # Проверка, что выбран один из типов графа
+        if not self.adjacency_matrix_radio.isChecked() and not self.adjacency_list_radio.isChecked():
+            QtWidgets.QMessageBox.warning(self, "Ошибка",
+                                          "Пожалуйста, выберите тип графа (матрица или список смежности).")
+            return
+
+        # Сохранение данных о выбранном алгоритме
+        file_dialog = QtWidgets.QFileDialog(self)
+        file_dialog.setNameFilter("Python files (*.py)")
+        if file_dialog.exec():
+            selected_file = file_dialog.selectedFiles()[0]
+            os.makedirs(ALGORITHMS_DIR, exist_ok=True)
+            filename = os.path.basename(selected_file)
+            destination = os.path.join(ALGORITHMS_DIR, filename)
+
+            if os.path.exists(destination):
+                QtWidgets.QMessageBox.warning(self, "Файл уже существует", "Алгоритм с таким именем уже существует.")
+                return
+
+            shutil.copyfile(selected_file, destination)
+
+            # Логика добавления алгоритма
+            self.config_data = {
+                "vertices": self.vertices_checkbox.isChecked(),
+                "adjacency_type": "matrix" if self.adjacency_matrix_radio.isChecked() else "list",
+                "start_point": self.start_point_checkbox.isChecked(),
+                "end_point": self.end_point_checkbox.isChecked(),
+                "file": destination  # Add the file path to the config data
+            }
+
+            # Возвращаем данные об алгоритме
+            self.accept()
+            return
 
 
 class Settings(QtWidgets.QDialog):
@@ -994,7 +1083,12 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.alg = Algorithms(self)
         self.wnd_about = None
         self.wnd_settings = None
+
+        self.custom_algorithm_buttons = {}  # key: filename (без .py), value: (QPushButton, alg_data)
+
         self.setupUi()
+
+        self.load_custom_algorithms()
 
     def setupUi(self):
         # Создание центрального виджета и его Layout
@@ -1119,26 +1213,36 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         top_side_panel = QtWidgets.QWidget()
         top_side_panel_style = "QFrame{" + f"background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);" + "}" + "QPushButton{" + f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px; padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;" + "}" + "QPushButton:pressed{" + f"background-color: #0056b3; border-color: #0047a1;" + "}"
         top_side_panel.setStyleSheet(top_side_panel_style)
-        top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
+        self.top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
 
-        # Кнопки для верхней части
-        self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
-        self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
-        self.graph_algorithm_dijkstra = QtWidgets.QPushButton("Алгоритм Дейкстра")
-        self.graph_algorithm_fl_yor = QtWidgets.QPushButton("Алгоритм Флойда-Уоршелла")
-        self.graph_algorithm_kruskal = QtWidgets.QPushButton("Алгоритм Крускала")
+        # Кнопки "Добавить" и "Удалить алгоритм"
+        self.add_algorithm_button = QtWidgets.QPushButton("➕ Добавить алгоритм")
+        self.remove_algorithm_button = QtWidgets.QPushButton("🗑 Удалить алгоритм")
 
-        self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
-        self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
-        self.graph_algorithm_dijkstra.clicked.connect(self.alghoritms)
-        self.graph_algorithm_fl_yor.clicked.connect(self.alghoritms)
-        self.graph_algorithm_kruskal.clicked.connect(self.alghoritms)
+        self.add_algorithm_button.clicked.connect(self.add_algorithm)
+        self.remove_algorithm_button.clicked.connect(self.remove_algorithm)
 
-        top_side_layout.addWidget(self.graph_algorithm_bfs)
-        top_side_layout.addWidget(self.graph_algorithm_dfs)
-        top_side_layout.addWidget(self.graph_algorithm_dijkstra)
-        top_side_layout.addWidget(self.graph_algorithm_fl_yor)
-        top_side_layout.addWidget(self.graph_algorithm_kruskal)
+        self.top_side_layout.addWidget(self.add_algorithm_button)
+        self.top_side_layout.addWidget(self.remove_algorithm_button)
+
+        # # Кнопки для верхней части
+        # self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
+        # self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
+        # self.graph_algorithm_dijkstra = QtWidgets.QPushButton("Алгоритм Дейкстра")
+        # self.graph_algorithm_fl_yor = QtWidgets.QPushButton("Флойд-Уоршелл")
+        # self.graph_algorithm_kruskal = QtWidgets.QPushButton("Алгоритм Крускала")
+        #
+        # self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
+        # self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
+        # self.graph_algorithm_dijkstra.clicked.connect(self.alghoritms)
+        # self.graph_algorithm_fl_yor.clicked.connect(self.alghoritms)
+        # self.graph_algorithm_kruskal.clicked.connect(self.alghoritms)
+        #
+        # self.top_side_layout.addWidget(self.graph_algorithm_bfs)
+        # self.top_side_layout.addWidget(self.graph_algorithm_dfs)
+        # self.top_side_layout.addWidget(self.graph_algorithm_dijkstra)
+        # self.top_side_layout.addWidget(self.graph_algorithm_fl_yor)
+        # self.top_side_layout.addWidget(self.graph_algorithm_kruskal)
 
         # Прокручиваемая область для верхней части
         top_scroll_area = QtWidgets.QScrollArea()
@@ -1253,6 +1357,80 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             }
         """)
 
+    def load_custom_algorithms(self):
+        config_path = os.path.join(ALGORITHMS_DIR, "algorithms_configurations")
+
+        if not os.path.exists(config_path):
+            return
+
+        with open(config_path, 'r') as json_file:
+            try:
+                all_configs = json.load(json_file)
+            except json.JSONDecodeError:
+                all_configs = {}
+
+        for algorithm_name, config in all_configs.items():
+            self._add_algorithm_button(algorithm_name, config, save_to_file=False)
+
+    def _add_algorithm_button(self, algorithm_name, algorithm_data, save_to_file=True):
+        if algorithm_name in self.custom_algorithm_buttons:
+            return  # уже есть
+
+        button = QtWidgets.QPushButton(algorithm_name)
+        button.clicked.connect(self.alghoritms)
+        self.custom_algorithm_buttons[algorithm_name] = (button, algorithm_data)
+        self.top_side_layout.addWidget(button)
+
+        if save_to_file:
+            config_path = os.path.join(ALGORITHMS_DIR, "algorithms_configurations")
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as json_file:
+                    try:
+                        all_configs = json.load(json_file)
+                    except json.JSONDecodeError:
+                        all_configs = {}
+            else:
+                all_configs = {}
+
+            all_configs[algorithm_name] = algorithm_data
+
+            with open(config_path, 'w') as json_file:
+                json.dump(all_configs, json_file, indent=4)
+
+    def add_algorithm(self):
+        dialog = AddAlgorithmDialog(self)
+        if dialog.exec():
+            algorithm_data = dialog.config_data
+            selected_file = algorithm_data["file"]
+
+            if algorithm_data:
+                name = os.path.splitext(os.path.basename(selected_file))[0]
+                self._add_algorithm_button(name, algorithm_data)
+
+    def remove_algorithm(self):
+        if not os.path.exists(ALGORITHMS_DIR):
+            QtWidgets.QMessageBox.information(self, "Нет алгоритмов", "Папка с алгоритмами пуста.")
+            return
+
+        files = [f for f in os.listdir(ALGORITHMS_DIR) if f.endswith('.py')]
+        if not files:
+            QtWidgets.QMessageBox.information(self, "Нет алгоритмов", "Нет доступных алгоритмов для удаления.")
+            return
+
+        item, ok = QtWidgets.QInputDialog.getItem(self, "Удалить алгоритм", "Выберите алгоритм:", files, editable=False)
+        if ok and item:
+            confirm = ConfirmationDialog(f"you want to delete '{item}'", self)
+            if confirm.exec():
+                try:
+                    os.remove(os.path.join(ALGORITHMS_DIR, item))
+                    name = os.path.splitext(item)[0]
+                    if name in self.custom_algorithm_buttons:
+                        btn = self.custom_algorithm_buttons.pop(name)[0]
+                        self.top_side_layout.removeWidget(btn)
+                        btn.deleteLater()
+                except Exception as e:
+                    QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось удалить: {e}")
+
     def _create_adjacency_matrix(self, graph_points):
         # Присваиваем каждой вершине уникальный индекс
         vertex_to_index = {v: i for i, v in enumerate(graph_points)}
@@ -1273,10 +1451,10 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
         return adjacency_matrix, vertex_to_index, index_to_vertex
 
-    def choise_start(self):
+    def choise_start(self, text="Выберите вершину с которой начнётся обход"):
         self.graph_area.start_point = None
         self.graph_area.scene.clearSelection()
-        self.set_hints_text("Выберите вершину с которой начнётся обход")
+        self.set_hints_text(f"{text}")
         self.graph_area.choise_mode = True
         self.graph_area.paint_line_mode = False
         self.graph_area.paint_ellipse_mode = False
@@ -1302,41 +1480,89 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         text = sender_but.text()
         sender_but.repaint()
         if len(self.graph_area.points):
-            if text == "Обход графа в ширину":
-                try:
-                    self.choise_start()
-                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-                except Exception as e:
-                    self.set_error_hint(e)
-            elif text == "Обход графа в глубину":
-                try:
-                    self.choise_start()
-                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-                except Exception as e:
-                    self.set_error_hint(e)
-            elif text == "Алгоритм Дейкстра":
-                try:
-                    self.choise_start()
-                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-                except Exception as e:
-                    self.set_error_hint(e)
-            elif text == "Алгоритм Флойда-Уоршелла":
-                try:
-                    self.choise_start()
-                    input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-                    self.alg.FloydWarshall(input_data)
-                except Exception as e:
-                    self.set_error_hint(e)
-            elif text == "Алгоритм Крускала":
-                try:
-                    self.choise_start()
-                    self.alg.Kruskal()
-                except Exception as e:
-                    self.set_error_hint(e)
+            # if text == "Обход графа в ширину":
+            #     try:
+            #         self.choise_start()
+            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+            #         self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
+            #     except Exception as e:
+            #         self.set_error_hint(e)
+            # elif text == "Обход графа в глубину":
+            #     try:
+            #         self.choise_start()
+            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+            #         self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
+            #     except Exception as e:
+            #         self.set_error_hint(e)
+            # elif text == "Алгоритм Дейкстра":
+            #     try:
+            #         self.choise_start()
+            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+            #         self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
+            #     except Exception as e:
+            #         self.set_error_hint(e)
+            # elif text == "Флойд-Уоршелл":
+            #     try:
+            #         self.choise_start()
+            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+            #         self.alg.FloydWarshall(input_data)
+            #     except Exception as e:
+            #         self.set_error_hint(e)
+            # elif text == "Алгоритм Крускала":
+            #     try:
+            #         self.choise_start()
+            #         self.alg.Kruskal()
+            #     except Exception as e:
+            #         self.set_error_hint(e)
+            # else:
+            #     print("start custom alg")
 
+
+
+            algorithm_data = self.custom_algorithm_buttons[f"{self.sender().text()}"][1]
+
+            # Данные, которые нужно передать в алгоритм
+            data = ""
+
+            if algorithm_data["vertices"]:
+                data += f"{len(self.graph_area.points)}\n"
+            if algorithm_data["adjacency_type"] == "matrix":
+                input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
+                for i in input_data:
+                    temp_str = [str(x) for x in i]
+                    data += f"{' '.join(temp_str)}\n"
+            else:
+                pass
+            if algorithm_data["start_point"]:
+                self.choise_start()
+                alg_start = self.graph_area.start_point
+                data += f"{vertex_to_index[alg_start]}\n"
+            if algorithm_data["end_point"]:
+                self.choise_start("Выберете конечную вершину")
+                alg_end = self.graph_area.start_point
+                data += f"{vertex_to_index[alg_end]}\n"
+
+
+            # Запускаем алгоритм, передавая данные через stdin и захватываем stdout
+            process = subprocess.Popen(
+                ['python', f'algorithms/{text}.py'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            # Передаем данные в процесс и получаем вывод
+            output, errors = process.communicate(input=data)
+
+            # Выводим результаты
+            print(f"Вывод алгоритма:\n{output}")
+            if errors:
+                print(f"Ошибки:\n{errors}")
+        else:
+            text = self.get_plain_hints_text()
+            self.set_hints_text("Графа не существует, применение алгоритмов невозможно.")
+            QtCore.QTimer.singleShot(3000, lambda: self.set_hints_text(text))
         self.graph_area.choise_mode = False
         self.switch_move_mode(True)
 
@@ -1405,6 +1631,13 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.color_btn.setFixedWidth(2 * self.graph_area.point_size - 6)
         self.color_btn.setStyleSheet(
             f"background-color: {self.color}; border-radius: {int(self.graph_area.point_size) - 3}px; width: {2 * self.graph_area.point_size - 6}px; height: {2 * self.graph_area.point_size - 6}px;")
+
+    def get_plain_hints_text(self):
+        """Метод для получения текста из области с подсказками без HTML-разметки."""
+        from PyQt6.QtGui import QTextDocument
+        doc = QTextDocument()
+        doc.setHtml(self.hints_label.text())
+        return doc.toPlainText()
 
     def set_hints_text(self, text):
         """Метод для установки текста в область с подсказками."""
