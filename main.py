@@ -1206,89 +1206,105 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.side_panel.setStyleSheet("background-color: white;")
         self.side_panel_size = int(self.width() * 0.15)
         self.side_panel.setFixedWidth(self.side_panel_size)  # Ширина боковой панели
-        # QSplitter для разделения боковой панели на две части
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
 
-        # Верхняя часть боковой панели (кнопки)
-        top_side_panel = QtWidgets.QWidget()
-        top_side_panel_style = "QFrame{" + f"background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);" + "}" + "QPushButton{" + f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px; padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;" + "}" + "QPushButton:pressed{" + f"background-color: #0056b3; border-color: #0047a1;" + "}"
-        top_side_panel.setStyleSheet(top_side_panel_style)
-        self.top_side_layout = QtWidgets.QVBoxLayout(top_side_panel)
+        # Основной layout боковой панели
+        side_layout = QtWidgets.QVBoxLayout(self.side_panel)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+        side_layout.setSpacing(0)
 
-        # Кнопки "Добавить" и "Удалить алгоритм"
-        self.add_algorithm_button = QtWidgets.QPushButton("➕ Добавить алгоритм")
-        self.remove_algorithm_button = QtWidgets.QPushButton("🗑 Удалить алгоритм")
+        # Верхняя часть боковой панели: фиксированный блок с кнопками + прокручиваемая часть для динамических элементов
+        top_container = QtWidgets.QWidget()
+        top_container_layout = QtWidgets.QVBoxLayout(top_container)
+        top_container_layout.setContentsMargins(0, 0, 0, 0)
+        top_container_layout.setSpacing(0)
 
+        # 1. Фиксированная панель с кнопками (всегда видна)
+        fixed_buttons_panel = QtWidgets.QWidget()
+        fixed_buttons_panel.setStyleSheet(
+            "background-color: white;"  # Оформление фиксированной части
+        )
+        fixed_buttons_layout = QtWidgets.QHBoxLayout(fixed_buttons_panel)
+        fixed_buttons_layout.setContentsMargins(5, 5, 5, 5)
+        fixed_buttons_layout.setSpacing(10)
+
+        # Создаем кнопки "Добавить алгоритм" и "Удалить алгоритм"
+        self.add_algorithm_button = QtWidgets.QPushButton("➕ Добавить")
+        self.remove_algorithm_button = QtWidgets.QPushButton("🗑 Удалить")
+
+        # Привязываем слоты к кнопкам
         self.add_algorithm_button.clicked.connect(self.add_algorithm)
         self.remove_algorithm_button.clicked.connect(self.remove_algorithm)
 
-        self.top_side_layout.addWidget(self.add_algorithm_button)
-        self.top_side_layout.addWidget(self.remove_algorithm_button)
+        # Применим стиль к кнопкам
+        buttons_style = (
+            "QPushButton {"
+            f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px;"
+            f"padding: {int(self.height() * 0.01)}px {int(self.side_panel_size * 0.005)}px; font-size: {int(self.side_panel_size * 0.068)}px;"
+            "}"
+            "QPushButton:pressed {"
+            "background-color: #0056b3; border-color: #0047a1;"
+            "}"
+        )
+        self.add_algorithm_button.setStyleSheet(buttons_style)
+        self.remove_algorithm_button.setStyleSheet(buttons_style)
 
-        # # Кнопки для верхней части
-        # self.graph_algorithm_bfs = QtWidgets.QPushButton("Обход графа в ширину")
-        # self.graph_algorithm_dfs = QtWidgets.QPushButton("Обход графа в глубину")
-        # self.graph_algorithm_dijkstra = QtWidgets.QPushButton("Алгоритм Дейкстра")
-        # self.graph_algorithm_fl_yor = QtWidgets.QPushButton("Флойд-Уоршелл")
-        # self.graph_algorithm_kruskal = QtWidgets.QPushButton("Алгоритм Крускала")
-        #
-        # self.graph_algorithm_bfs.clicked.connect(self.alghoritms)
-        # self.graph_algorithm_dfs.clicked.connect(self.alghoritms)
-        # self.graph_algorithm_dijkstra.clicked.connect(self.alghoritms)
-        # self.graph_algorithm_fl_yor.clicked.connect(self.alghoritms)
-        # self.graph_algorithm_kruskal.clicked.connect(self.alghoritms)
-        #
-        # self.top_side_layout.addWidget(self.graph_algorithm_bfs)
-        # self.top_side_layout.addWidget(self.graph_algorithm_dfs)
-        # self.top_side_layout.addWidget(self.graph_algorithm_dijkstra)
-        # self.top_side_layout.addWidget(self.graph_algorithm_fl_yor)
-        # self.top_side_layout.addWidget(self.graph_algorithm_kruskal)
+        # Добавляем кнопки в фиксированный layout
+        fixed_buttons_layout.addWidget(self.add_algorithm_button)
+        fixed_buttons_layout.addWidget(self.remove_algorithm_button)
 
-        # Прокручиваемая область для верхней части
-        top_scroll_area = QtWidgets.QScrollArea()
-        top_scroll_area.setWidgetResizable(True)
-        top_scroll_area.setWidget(top_side_panel)
+        # 2. Прокручиваемая область для динамически добавляемых элементов
+        dynamic_container = QtWidgets.QWidget()
+        # layout для динамического добавления кнопок и других виджетов
+        self.top_side_layout = QtWidgets.QVBoxLayout(dynamic_container)
+        self.top_side_layout.setContentsMargins(5, 5, 5, 5)
+        self.top_side_layout.setSpacing(5)
 
-        # Нижняя часть боковой панели (текст с подсказками)
+        # Прокручиваемая область, в которой размещен dynamic_container
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(dynamic_container)
+        scroll_area.setStyleSheet("background-color: white; border: none;")
+        scroll_area.setStyleSheet(buttons_style)
+
+        # Добавляем фиксированную панель с кнопками и прокручиваемую область в верхний контейнер
+        top_container_layout.addWidget(fixed_buttons_panel)
+        top_container_layout.addWidget(scroll_area)
+
+        # Далее создаем нижнюю часть боковой панели
         bottom_side_panel = QtWidgets.QWidget()
-        bottom_side_panel_style = None
         bottom_side_panel.setStyleSheet("""
-                    QWidget {
-                        background-color: rgb(200, 200, 250); /* Светло-серый фон */
-                    }
-
-                    QLabel {
-                        color: black; /* Основной текст черный */
-                    }
-
-                    .error {
-                        color: red; /* Ошибки будут красного цвета */
-                    }
-                """)
+            QWidget {
+                background-color: rgb(200, 200, 250); /* Фон подсказок */
+            }
+            QLabel {
+                color: black;
+            }
+            .error {
+                color: red;
+            }
+        """)
         bottom_side_layout = QtWidgets.QVBoxLayout(bottom_side_panel)
+        bottom_side_layout.setContentsMargins(5, 5, 5, 5)
 
         # Текст с подсказками
         self.hints_label = QtWidgets.QLabel(self)
         self.hints_label.setWordWrap(True)
         bottom_side_layout.addWidget(self.hints_label)
-
-        # Добавляем растяжимость, чтобы текст был прижатым к верхнему краю
         bottom_side_layout.addStretch(1)
 
-        # Прокручиваемая область для нижней части
+        # Создаем прокручиваемую область для подсказок
         bottom_scroll_area = QtWidgets.QScrollArea()
         bottom_scroll_area.setWidgetResizable(True)
         bottom_scroll_area.setWidget(bottom_side_panel)
+        bottom_scroll_area.setStyleSheet("border: none;")
 
-        # Добавление частей в splitter
-        splitter.addWidget(top_scroll_area)
+        # Используем QSplitter для организации верхней и нижней частей боковой панели
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        splitter.addWidget(top_container)
         splitter.addWidget(bottom_scroll_area)
-
-        # Установка размеров частей splitter'а
         splitter.setSizes([int(self.height() * 0.7), int(self.height() * 0.3)])
 
-        # Добавляем splitter в боковую панель
-        side_layout = QtWidgets.QVBoxLayout(self.side_panel)
+        # Добавляем splitter в основной layout боковой панели
         side_layout.addWidget(splitter)
 
         # Добавляем боковую панель в основной layout
