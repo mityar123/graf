@@ -35,6 +35,33 @@ def hex_to_QColor(hex_color):
     b = int(hex_color[4:6], 16)
     return QtGui.QColor(r, g, b)
 
+class CodeDialog(QtWidgets.QDialog):
+    def __init__(self, code):
+        super().__init__()
+        self.setWindowTitle("Ваш код")
+        layout = QtWidgets.QVBoxLayout()
+
+        layout.addWidget(QtWidgets.QLabel("Скопируйте код:"))
+
+        self.code_edit = QtWidgets.QLineEdit()
+        self.code_edit.setText(code)
+        self.code_edit.setReadOnly(True)
+        layout.addWidget(self.code_edit)
+
+        copy_button = QtWidgets.QPushButton("Скопировать")
+        copy_button.clicked.connect(self.copy_code)
+        layout.addWidget(copy_button)
+
+        ok_button = QtWidgets.QPushButton("ОК")
+        ok_button.clicked.connect(self.accept)
+        layout.addWidget(ok_button)
+
+        self.setLayout(layout)
+
+    def copy_code(self):
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(self.code_edit.text())
+
 
 class ConfirmationDialog(QtWidgets.QDialog):
     def __init__(self, reason, parent=None):
@@ -90,7 +117,7 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
 
         # Радио-кнопки для выбора типа графа (матрица или список смежности)
         self.adjacency_matrix_radio = QtWidgets.QRadioButton("Передать матрицу смежности", self)
-        self.adjacency_list_radio = QtWidgets.QRadioButton("Передать список смежности", self)
+        self.adjacency_list_radio = QtWidgets.QRadioButton("Передать список смежности (словарь)", self)
 
         # Устанавливаем группу для радио кнопок
         self.adjacency_group = QtWidgets.QButtonGroup(self)
@@ -240,142 +267,142 @@ class CustomGraphicsScene(QGraphicsScene):
         super().mousePressEvent(event)
 
 
-class Algorithms:
-    def __init__(self, parent=None, orientation=False, weighted=False):
-        self.parent = parent
-        self.orientation = orientation
-        self.weighted = weighted
-
-    def BFS(self, graph, start_vertex, index_to_vertex):
-        # Создаем очередь для хранения вершин, которые нужно посетить
-        queue = deque()
-        queue.append(start_vertex)
-
-        # Массив для отслеживания посещенных вершин
-        visited = [False] * len(graph)
-        visited[start_vertex] = True
-
-        while queue:
-            current_vertex = queue.popleft()
-
-            self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[current_vertex].label.toPlainText()}", "\n")
-
-            for i in range(len(graph[current_vertex])):
-                if not visited[i] and graph[current_vertex][i]:
-                    visited[i] = True
-                    queue.append(i)
-
-    def DFS(self, graph, start_vertex, index_to_vertex):
-        """Обход графа в глубину (DFS)."""
-
-        def dfs_recursive(vertex, visited):
-            visited[vertex] = True
-            self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[vertex].label.toPlainText()}", "\n")
-
-            for i in range(len(graph[vertex])):
-                if not visited[i] and graph[vertex][i]:
-                    dfs_recursive(i, visited)
-
-        visited = [False] * len(graph)
-        dfs_recursive(start_vertex, visited)
-
-    def Dijkstra(self, graph, start, index_to_vertex):
-        n = len(graph)
-        dist = [float('inf')] * n  # Массив расстояний
-        prev = [None] * n  # Массив предков для восстановления пути
-        dist[start] = 0  # Расстояние до стартовой вершины = 0
-        pq = [(0, start)]  # Очередь с приоритетом
-
-        while pq:
-            d, v = heapq.heappop(pq)  # Извлекаем вершину с минимальным расстоянием
-            if d > dist[v]:
-                continue
-            for u, weight in enumerate(graph[v]):
-                # Если существует ребро (вес больше 0) и найден более короткий путь
-                if weight > 0 and dist[v] + weight < dist[u]:
-                    dist[u] = dist[v] + weight
-                    prev[u] = v  # Запоминаем предка
-                    heapq.heappush(pq, (dist[u], u))
-
-        # Выводим кратчайшие пути от начальной вершины до всех остальных
-        for vertex in range(n):
-            if start != vertex:
-                if dist[vertex] == float('inf'):
-                    self.parent.add_hints_text(f"Нет пути от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}\n", "\n")
-                else:
-                    path = []
-                    current = vertex
-                    while current is not None:
-                        path.append(current + 1)  # Составляем путь (индексация с 1)
-                        current = prev[current]
-                    path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
-                    self.parent.add_hints_text(
-                        f"Кратчайший путь от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
-                    )
-
-    def FloydWarshall(self, graph):
-        n = len(graph)
-        dist = [[float('inf')] * n for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    dist[i][j] = 0
-                elif graph[i][j]:
-                    dist[i][j] = graph[i][j]
-        for k in range(n):
-            for i in range(n):
-                for j in range(n):
-                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-        self.parent.add_hints_text(f"Матрица кратчайших путей: {dist}", "\n")
-
-    def Kruskal(self, edges, n):
-        edges.sort(key=lambda x: x[2])
-        parent = list(range(n))
-
-        def find(v):
-            if parent[v] != v:
-                parent[v] = find(parent[v])
-            return parent[v]
-
-        mst = []
-        for u, v, weight in edges:
-            ru, rv = find(u), find(v)
-            if ru != rv:
-                mst.append((u, v, weight))
-                parent[ru] = rv
-        self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
-
-    def Prim(self, graph):
-        n = len(graph)
-        in_mst = [False] * n
-        min_edge = [(float('inf'), -1)] * n
-        min_edge[0] = (0, -1)
-        mst = []
-        for _ in range(n):
-            v = min((w, v) for v, (w, _) in enumerate(min_edge) if not in_mst[v])[1]
-            in_mst[v] = True
-            if min_edge[v][1] != -1:
-                mst.append((min_edge[v][1], v, min_edge[v][0]))
-            for u, weight in enumerate(graph[v]):
-                if weight and not in_mst[u] and weight < min_edge[u][0]:
-                    min_edge[u] = (weight, v)
-        self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
-
-    def Levitan(self, graph, start):
-        n = len(graph)
-        dist = [float('inf')] * n
-        dist[start] = 0
-        queue = deque([start])
-        while queue:
-            v = queue.popleft()
-            for u, weight in enumerate(graph[v]):
-                if weight and dist[u] > dist[v] + weight:
-                    dist[u] = dist[v] + weight
-                    if weight == 1:
-                        queue.appendleft(u)
-                    else:
-                        queue.append(u)
-        self.parent.add_hints_text(f"Кратчайшие пути (Левитан): {dist}", "\n")
+# class Algorithms:
+#     def __init__(self, parent=None, orientation=False, weighted=False):
+#         self.parent = parent
+#         self.orientation = orientation
+#         self.weighted = weighted
+#
+#     def BFS(self, graph, start_vertex, index_to_vertex):
+#         # Создаем очередь для хранения вершин, которые нужно посетить
+#         queue = deque()
+#         queue.append(start_vertex)
+#
+#         # Массив для отслеживания посещенных вершин
+#         visited = [False] * len(graph)
+#         visited[start_vertex] = True
+#
+#         while queue:
+#             current_vertex = queue.popleft()
+#
+#             self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[current_vertex].label.toPlainText()}", "\n")
+#
+#             for i in range(len(graph[current_vertex])):
+#                 if not visited[i] and graph[current_vertex][i]:
+#                     visited[i] = True
+#                     queue.append(i)
+#
+#     def DFS(self, graph, start_vertex, index_to_vertex):
+#         """Обход графа в глубину (DFS)."""
+#
+#         def dfs_recursive(vertex, visited):
+#             visited[vertex] = True
+#             self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[vertex].label.toPlainText()}", "\n")
+#
+#             for i in range(len(graph[vertex])):
+#                 if not visited[i] and graph[vertex][i]:
+#                     dfs_recursive(i, visited)
+#
+#         visited = [False] * len(graph)
+#         dfs_recursive(start_vertex, visited)
+#
+#     def Dijkstra(self, graph, start, index_to_vertex):
+#         n = len(graph)
+#         dist = [float('inf')] * n  # Массив расстояний
+#         prev = [None] * n  # Массив предков для восстановления пути
+#         dist[start] = 0  # Расстояние до стартовой вершины = 0
+#         pq = [(0, start)]  # Очередь с приоритетом
+#
+#         while pq:
+#             d, v = heapq.heappop(pq)  # Извлекаем вершину с минимальным расстоянием
+#             if d > dist[v]:
+#                 continue
+#             for u, weight in enumerate(graph[v]):
+#                 # Если существует ребро (вес больше 0) и найден более короткий путь
+#                 if weight > 0 and dist[v] + weight < dist[u]:
+#                     dist[u] = dist[v] + weight
+#                     prev[u] = v  # Запоминаем предка
+#                     heapq.heappush(pq, (dist[u], u))
+#
+#         # Выводим кратчайшие пути от начальной вершины до всех остальных
+#         for vertex in range(n):
+#             if start != vertex:
+#                 if dist[vertex] == float('inf'):
+#                     self.parent.add_hints_text(f"Нет пути от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}\n", "\n")
+#                 else:
+#                     path = []
+#                     current = vertex
+#                     while current is not None:
+#                         path.append(current + 1)  # Составляем путь (индексация с 1)
+#                         current = prev[current]
+#                     path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
+#                     self.parent.add_hints_text(
+#                         f"Кратчайший путь от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
+#                     )
+#
+#     def FloydWarshall(self, graph):
+#         n = len(graph)
+#         dist = [[float('inf')] * n for _ in range(n)]
+#         for i in range(n):
+#             for j in range(n):
+#                 if i == j:
+#                     dist[i][j] = 0
+#                 elif graph[i][j]:
+#                     dist[i][j] = graph[i][j]
+#         for k in range(n):
+#             for i in range(n):
+#                 for j in range(n):
+#                     dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+#         self.parent.add_hints_text(f"Матрица кратчайших путей: {dist}", "\n")
+#
+#     def Kruskal(self, edges, n):
+#         edges.sort(key=lambda x: x[2])
+#         parent = list(range(n))
+#
+#         def find(v):
+#             if parent[v] != v:
+#                 parent[v] = find(parent[v])
+#             return parent[v]
+#
+#         mst = []
+#         for u, v, weight in edges:
+#             ru, rv = find(u), find(v)
+#             if ru != rv:
+#                 mst.append((u, v, weight))
+#                 parent[ru] = rv
+#         self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
+#
+#     def Prim(self, graph):
+#         n = len(graph)
+#         in_mst = [False] * n
+#         min_edge = [(float('inf'), -1)] * n
+#         min_edge[0] = (0, -1)
+#         mst = []
+#         for _ in range(n):
+#             v = min((w, v) for v, (w, _) in enumerate(min_edge) if not in_mst[v])[1]
+#             in_mst[v] = True
+#             if min_edge[v][1] != -1:
+#                 mst.append((min_edge[v][1], v, min_edge[v][0]))
+#             for u, weight in enumerate(graph[v]):
+#                 if weight and not in_mst[u] and weight < min_edge[u][0]:
+#                     min_edge[u] = (weight, v)
+#         self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
+#
+#     def Levitan(self, graph, start):
+#         n = len(graph)
+#         dist = [float('inf')] * n
+#         dist[start] = 0
+#         queue = deque([start])
+#         while queue:
+#             v = queue.popleft()
+#             for u, weight in enumerate(graph[v]):
+#                 if weight and dist[u] > dist[v] + weight:
+#                     dist[u] = dist[v] + weight
+#                     if weight == 1:
+#                         queue.appendleft(u)
+#                     else:
+#                         queue.append(u)
+#         self.parent.add_hints_text(f"Кратчайшие пути (Левитан): {dist}", "\n")
 
 
 class SortedPointDict:
@@ -1080,7 +1107,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
         self.color = "#000000"
         self.graph_area = None
-        self.alg = Algorithms(self)
+        # self.alg = Algorithms(self)
         self.wnd_about = None
         self.wnd_settings = None
 
@@ -1192,11 +1219,11 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.size_slider.valueChanged.connect(self.change_size)
         self.tool_panel_layout.addWidget(self.size_slider)
 
-        # Кнопка выбора фона
-        self.background_button = SvgButton("border-all-solid.svg")
-        self.background_button.setFixedWidth(int(monitor_width * 0.03))
-        self.background_button.clicked.connect(self.choose_background)
-        self.tool_panel_layout.addWidget(self.background_button)
+        # # Кнопка вызова редактора
+        # self.call_editor_button = SvgButton("border-all-solid.svg")
+        # self.call_editor_button.setFixedWidth(int(monitor_width * 0.03))
+        # self.call_editor_button.clicked.connect(self.choose_background)
+        # self.tool_panel_layout.addWidget(self.call_editor_button)
 
         # Добавляем панель инструментов в layout
         vertical_layout.addWidget(self.tool_panel)
@@ -1417,6 +1444,20 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         dialog = AddAlgorithmDialog(self)
         if dialog.exec():
             algorithm_data = dialog.config_data
+
+            # datat = "# Шаблон для ввода(шапка)"
+            # if algorithm_data["vertices"]:
+            #     datat += f"n = int(input()) # кол-во вершин\n"
+            # if algorithm_data["adjacency_type"] == "matrix":
+            #     pass
+            # else:
+            #     pass
+            # if algorithm_data["start_point"]:
+            #     datat += f"start_point = input()\n"
+            # if algorithm_data["end_point"]:
+            #     datat += f"end_point = input()\n"
+            # dialog2 = CodeDialog(datat)
+
             selected_file = algorithm_data["file"]
 
             if algorithm_data:
@@ -1466,6 +1507,21 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 adjacency_matrix[u][v] = edge.weight
 
         return adjacency_matrix, vertex_to_index, index_to_vertex
+
+    def _create_adjecency_list(self, graph_points):
+        # Присваиваем каждой вершине уникальный индекс
+        vertex_to_index = {v: i for i, v in enumerate(graph_points)}
+
+        # Создаем отображение от индекса к вершине
+        index_to_vertex = {i: v for i, v in enumerate(graph_points)}
+
+        # Создаём словарь для списка смежности
+        dic = {
+            i: [vertex_to_index[x[0]] for x in graph_points[index_to_vertex[i]]]
+            for i in range(len(vertex_to_index))
+        }
+
+        return dic, vertex_to_index, index_to_vertex
 
     def choise_start(self, text="Выберите вершину с которой начнётся обход"):
         self.graph_area.start_point = None
@@ -1548,7 +1604,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     temp_str = [str(x) for x in i]
                     data += f"{' '.join(temp_str)}\n"
             else:
-                pass
+                input_data, vertex_to_index, index_to_vertex = self._create_adjecency_list(self.graph_area.points)
+
             if algorithm_data["start_point"]:
                 self.choise_start()
                 alg_start = self.graph_area.start_point
@@ -1572,9 +1629,9 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             output, errors = process.communicate(input=data)
 
             # Выводим результаты
-            print(f"Вывод алгоритма:\n{output}")
+            self.set_hints_text(f"Вывод алгоритма:\n{output}")
             if errors:
-                print(f"Ошибки:\n{errors}")
+                self.set_error_hint(f"Ошибки:\n{errors}")
         else:
             text = self.get_plain_hints_text()
             self.set_hints_text("Графа не существует, применение алгоритмов невозможно.")
@@ -1657,19 +1714,26 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
     def set_hints_text(self, text):
         """Метод для установки текста в область с подсказками."""
+        # Заменяем \n на <br> для переноса строк
+        text = text.replace("\n", "<br>")
         html_text = f"<p><span style='color: black'>{text}</span></p>"
         self.hints_label.setText(html_text)
 
     def add_hints_text(self, text, splitter=None):
+        """Метод для добавления текста в область с подсказками."""
         if splitter is None:
             self.hints_label.setText(self.hints_label.text()[:-11] + text + "</span></p>")
         elif splitter == "\n":
+            # Заменяем \n на <br> и добавляем новый блок
+            text = text.replace("\n", "<br>")
             html_text = f"<p><span style='color: black'>{text}</span></p>"
             self.hints_label.setText(self.hints_label.text() + html_text)
 
     def set_error_hint(self, error_message):
         """Метод для добавления ошибки в область с подсказками."""
-        html_text = f"<p><span class='error'>{error_message}</span></p>"  # <p> - абзац <span> - применение стилей
+        # Заменяем \n на <br> в сообщении об ошибке
+        error_message = error_message.replace("\n", "<br>")
+        html_text = f"<p><span class='error'>{error_message}</span></p>"
         self.hints_label.setText(html_text)
         self.hints_label.setProperty("class", "error")
         self.hints_label.style().unpolish(self.hints_label)
@@ -1683,8 +1747,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area.delete_mode = False
         self.graph_area.move_mode = False
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
-        text = """
-                Вы в режиме рисования вершин, нажмите на сцену, чтобы поставить вершину.
+        text = """Вы в режиме рисования вершин, нажмите на сцену, чтобы поставить вершину.
             """
         self.set_hints_text(text)
 
@@ -1696,8 +1759,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_ellipse_button.setChecked(False)
         self.erase_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
-        text = """
-                Вы в режиме рисования рёбер, выделите одну вершину нажатием, а затем нажмите на другую вершину.
+        text = """Вы в режиме рисования рёбер, выделите одну вершину нажатием, а затем нажмите на другую вершину.
                 Зажав Ctrl, при выбранной вершине, вы можете нарисовать несколько ребер от неё.
             """
         self.set_hints_text(text)
@@ -1710,8 +1772,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.paint_ellipse_button.setChecked(False)
         self.paint_line_button.setChecked(False)
         self.graph_area.setDragMode(QGraphicsView.DragMode.NoDrag)
-        text = """
-                Вы в режиме удаления, нажмите на объект, чтобы удалить его.
+        text = """Вы в режиме удаления, нажмите на объект, чтобы удалить его.
                 (На вершину или ближе к середине ребра).
             """
         self.set_hints_text(text)
@@ -1737,8 +1798,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             self.graph_area.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.graph_area.update()
             if not missing_text:
-                text = """
-                        Вы в режиме передвижения и выбора.
+                text = """Вы в режиме передвижения и выбора.
                         Зажав Ctrl вы сможете выбрать сразу несколько вершин.
                     """
                 self.set_hints_text(text)
@@ -1747,6 +1807,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         """Переключение сетки на графе."""
         self.graph_area.grid_enabled = not self.graph_area.grid_enabled
         self.graph_area.update()
+
 
 
 if __name__ == '__main__':
