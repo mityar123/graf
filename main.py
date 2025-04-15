@@ -35,6 +35,7 @@ def hex_to_QColor(hex_color):
     b = int(hex_color[4:6], 16)
     return QtGui.QColor(r, g, b)
 
+
 class CodeDialog(QtWidgets.QDialog):
     def __init__(self, code):
         super().__init__()
@@ -357,13 +358,38 @@ class Settings(QtWidgets.QDialog):
 
     def setupUi(self):
         self.setWindowTitle("Настройки")
-        self.setFixedSize(400, 300)  # Фиксируем размер окна
+        self.setFixedSize(300, 150)
 
-        # Установка стиля
-        self.setStyleSheet("background-color: gray;")
+        self.setStyleSheet("""
+                    background-color: #f0f0f0;
+                    font-family: 'Arial', sans-serif;
+                """)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Чекбокс для отображения взвешенного графа
+        self.checkbox_weighted = QtWidgets.QCheckBox("Взвешенный граф", self)
+        self.checkbox_weighted.setChecked(False)  # Изначально не выбран
+        self.checkbox_weighted.setStyleSheet("""
+                   font-size: 14px;
+                   color: #333333;
+                   padding: 10px;
+                   margin: 5px;
+               """)
+        self.checkbox_weighted.stateChanged.connect(self.toggle_weight)
+        layout.addWidget(self.checkbox_weighted)
+
+    def toggle_weight(self):
+        """Обработчик для переключения флага взвешенного графа"""
+        if self.checkbox_weighted.isChecked():
+            wnd.graph_area.weighted_graph = True
+            wnd.graph_area.toggle_weighted_graph()
+        else:
+            wnd.graph_area.weighted_graph = False
+            wnd.graph_area.toggle_weighted_graph()
 
 
-# ставим QDialog чтобы было модальное окно, оно делает невозможность взаимодействия с другими окнами пока полльзователь не зароет это
+# Ставим QDialog чтобы было модальное окно, оно делает невозможность взаимодействия с другими окнами пока пользователь не зароет это
 class About_program(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -782,6 +808,16 @@ class GraphEdge(QGraphicsLineItem):
         self.start_v.signals.positionChanged.connect(self.update_position)
         self.end_v.signals.positionChanged.connect(self.update_position)
 
+        self.update_weight_display()
+
+
+    def update_weight_display(self):
+        """Обновить отображение веса в зависимости от флага weighted_graph"""
+        if wnd.graph_area.weighted_graph:
+            self.label.setVisible(True)
+        else:
+            self.label.setVisible(False)
+
     def config_menu(self, pos):
         """Контекстное меню для ребра."""
         menu = QtWidgets.QMenu()
@@ -875,6 +911,7 @@ class GraphEdge(QGraphicsLineItem):
                 ed.weight = weight
         self.label.setPlainText(str(weight))
         self.update_position()  # Обновляем позицию после изменения текста
+        self.update_weight_display()
 
 
 class GraphArea(QGraphicsView):
@@ -908,12 +945,14 @@ class GraphArea(QGraphicsView):
         # Стандартное увеличени
         self.scale(2, 2)
 
-        # СПРОСИТЬ КАК ОТРИСОВЫВАТЬ СЕТКУ
-        # Параметры сетки
-        self.grid_enabled = True  # Флаг для включения сетки
-        self.grid_size = 5  # Размер одной ячейки сетки
-        self.grid_color = QtGui.QColor(200, 200, 200, 125)  # Цвет сетки (с четвёртым паказателем для прозрачности)
-        self.draw_grid()
+        # # СПРОСИТЬ КАК ОТРИСОВЫВАТЬ СЕТКУ
+        # # Параметры сетки
+        # self.grid_enabled = True  # Флаг для включения сетки
+        # self.grid_size = 5  # Размер одной ячейки сетки
+        # self.grid_color = QtGui.QColor(200, 200, 200, 125)  # Цвет сетки (с четвёртым паказателем для прозрачности)
+        # self.draw_grid()
+
+        self.weighted_graph = False
 
         # Режимы взаимодействия
         self.move_mode = True
@@ -923,8 +962,14 @@ class GraphArea(QGraphicsView):
         self.choise_mode = False
         self.tools_mode = False
 
-    def draw_grid(self):
-        pass
+    # def draw_grid(self):
+    #     pass
+
+    def toggle_weighted_graph(self):
+        """Переключить отображение веса рёбер"""
+        for item in self.scene.items():
+            if isinstance(item, GraphEdge):
+                item.update_weight_display()
 
     def wheelEvent(self, event):
         """Обработка колесика мыши для масштабирования сцены."""
@@ -1262,7 +1307,7 @@ class SvgButton(QtWidgets.QPushButton):
         self.setIcon(QtGui.QIcon(icon_path))
 
 
-class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
+class Grafs(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Graf++")
@@ -1271,7 +1316,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         self.graph_area = None
         # self.alg = Algorithms(self)
         self.wnd_about = None
-        self.wnd_settings = None
+        self.wnd_settings = Settings(self)
 
         self.custom_algorithm_buttons = {}  # key: filename (без .py), value: (QPushButton, alg_data)
 
@@ -1764,8 +1809,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
             # else:
             #     print("start custom alg")
 
-
-
             algorithm_data = self.custom_algorithm_buttons[f"{self.sender().text()}"][1]
 
             # Данные, которые нужно передать в алгоритм
@@ -1791,7 +1834,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 self.choise_start("Выберете конечную вершину")
                 alg_end = self.graph_area.start_point
                 data += f"{vertex_to_index[alg_end]}\n"
-
 
             # Запускаем алгоритм, передавая данные через stdin и захватываем stdout
             process = subprocess.Popen(
@@ -1861,7 +1903,6 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     self.graph_area.find_and_add_line(point["id"], link_point, weight)
 
     def settings(self):
-        self.wnd_settings = Settings(self)  # Создаем экземпляр Settings
         self.wnd_settings.show()  # Используем show() для открытия окна
 
     def about_program(self):
@@ -1884,8 +1925,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
 
     def get_plain_hints_text(self):
         """Метод для получения текста из области с подсказками без HTML-разметки."""
-        from PyQt6.QtGui import QTextDocument
-        doc = QTextDocument()
+        doc = QtGui.QTextDocument()
         doc.setHtml(self.hints_label.text())
         return doc.toPlainText()
 
@@ -1980,11 +2020,10 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     """
                 self.set_hints_text(text)
 
-    def choose_background(self):
-        """Переключение сетки на графе."""
-        self.graph_area.grid_enabled = not self.graph_area.grid_enabled
-        self.graph_area.update()
-
+    # def choose_background(self):
+    #     """Переключение сетки на графе."""
+    #     self.graph_area.grid_enabled = not self.graph_area.grid_enabled
+    #     self.graph_area.update()
 
 
 if __name__ == '__main__':
