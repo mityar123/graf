@@ -104,11 +104,118 @@ class ConfirmationDialog(QtWidgets.QDialog):
         self.reject()  # Закрывает диалог и возвращает результат
 
 
+class TemplateDialog(QtWidgets.QDialog):
+    def __init__(self, code_text, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Сгенерированный шаблон")
+        self.resize(600, 400)
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #F7F7F7;  /* Светлый фон */
+                border-radius: 10px;
+            }
+            QPlainTextEdit {
+                background-color: #FFFFFF;  /* Белый фон для текста */
+                border: 1px solid #E0E0E0;
+                border-radius: 5px;
+                padding: 10px;
+                font-family: Arial, sans-serif;
+                font-size: 12pt;
+                color: #333;
+            }
+            QPushButton {
+                background-color: #2196F3;  /* Синий цвет */
+                color: white;
+                border-radius: 5px;
+                padding: 10px 20px;
+                font-size: 12pt;
+                margin: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;  /* Темно-синий при наведении */
+            }
+            QPushButton:pressed {
+                background-color: #1565C0;  /* Еще более темный синий при нажатии */
+            }
+        """)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Добавляем поле для кода
+        self.text_edit = QtWidgets.QPlainTextEdit(self)
+        self.text_edit.setPlainText(code_text)
+        self.text_edit.setReadOnly(True)
+
+        layout.addWidget(self.text_edit)
+
+        # Кнопки
+        copy_button = QtWidgets.QPushButton("Скопировать", self)
+        save_button = QtWidgets.QPushButton("Сохранить", self)
+
+        buttons_layout = QtWidgets.QHBoxLayout()
+        buttons_layout.addWidget(copy_button)
+        buttons_layout.addWidget(save_button)
+
+        layout.addLayout(buttons_layout)
+
+        # Обработчики кнопок
+        copy_button.clicked.connect(self.copy_to_clipboard)
+        save_button.clicked.connect(self.save_to_file)
+
+    def copy_to_clipboard(self):
+        QtWidgets.QApplication.clipboard().setText(self.text_edit.toPlainText())
+        QtWidgets.QMessageBox.information(self, "Скопировано", "Шаблон скопирован в буфер обмена.")
+
+    def save_to_file(self):
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Сохранить шаблон", "", "Python files (*.py)")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.text_edit.toPlainText())
+            QtWidgets.QMessageBox.information(self, "Сохранено", f"Шаблон сохранён в:\n{path}")
+
+
 class AddAlgorithmDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Добавить алгоритм")
         self.setFixedSize(400, 300)
+
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #F0F0F0;  /* Очень светлый фон для всего окна */
+                border-radius: 10px;
+                font-family: Arial, sans-serif;
+            }
+            QLabel {
+                color: #333;
+                font-size: 12pt;
+            }
+            QCheckBox {
+                font-size: 12pt;
+                color: #333;
+            }
+            QRadioButton {
+                font-size: 12pt;
+                color: #333;
+            }
+            QPushButton {
+                background-color: #2196F3;  /* Синий цвет */
+                color: white;
+                border-radius: 5px;
+                padding: 10px 20px;
+                font-size: 12pt;
+                margin: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;  /* Темно-синий при наведении */
+            }
+            QPushButton:pressed {
+                background-color: #1565C0;  /* Еще более темный синий при нажатии */
+            }
+        """)
 
         self.config_data = None
 
@@ -130,26 +237,41 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
         self.start_point_checkbox = QtWidgets.QCheckBox("Нужна начальная точка", self)
         self.end_point_checkbox = QtWidgets.QCheckBox("Нужна конечная точка", self)
 
-        # Кнопки
-        self.add_button = QtWidgets.QPushButton("Добавить", self)
+        self.add_button = QtWidgets.QPushButton("Выбрать файл", self)
         self.cancel_button = QtWidgets.QPushButton("Отмена", self)
 
-        # Размещаем элементы на форме
+        self.create_template_button = QtWidgets.QPushButton("Создать шаблон", self)
+
+        # Размещение элементов
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.vertices_checkbox)
         layout.addWidget(self.adjacency_matrix_radio)
         layout.addWidget(self.adjacency_list_radio)
         layout.addWidget(self.start_point_checkbox)
         layout.addWidget(self.end_point_checkbox)
+        layout.addWidget(self.create_template_button)
 
         buttons_layout = QtWidgets.QHBoxLayout()
         buttons_layout.addWidget(self.cancel_button)
         buttons_layout.addWidget(self.add_button)
         layout.addLayout(buttons_layout)
 
-        # Обработчики событий
+        # Обработчики
         self.add_button.clicked.connect(self.add_algorithm)
         self.cancel_button.clicked.connect(self.reject)
+        self.create_template_button.clicked.connect(self.show_template_dialog)
+        self.adjacency_matrix_radio.toggled.connect(self.update_vertices_checkbox_state)
+        self.adjacency_list_radio.toggled.connect(self.update_vertices_checkbox_state)
+        self.update_vertices_checkbox_state()
+
+    def update_vertices_checkbox_state(self):
+        if self.adjacency_list_radio.isChecked():
+            # Для списка обязательно указывать количество вершин
+            self.vertices_checkbox.setChecked(True)
+            self.vertices_checkbox.setEnabled(False)
+        else:
+            # Для матрицы можно выбирать
+            self.vertices_checkbox.setEnabled(True)
 
     def add_algorithm(self):
         # Проверка, что выбран один из типов графа
@@ -186,6 +308,46 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
             self.accept()
             return
 
+    def generate_template_text(self):
+        parts = []
+
+        if self.vertices_checkbox.isChecked():
+            parts.append("    num_vertices = int(input())  # количество вершин")
+
+        if self.adjacency_matrix_radio.isChecked():
+            if self.vertices_checkbox.isChecked():
+                parts.append(
+                    "    adjacency_matrix = [list(map(int, input().split())) for _ in range(num_vertices)]  # матрица смежности")
+            else:
+                parts.append("    first_line = list(map(int, input().split()))")
+                parts.append("    num_vertices = len(first_line)")
+                parts.append("    adjacency_matrix = [first_line] # матрица смежности")
+                parts.append("    for _ in range(num_vertices - 1):")
+                parts.append("        adjacency_matrix.append(list(map(int, input().split())))")
+        elif self.adjacency_list_radio.isChecked():
+            parts.append("    # Введите список смежности в формате: \"вершина: соседи через пробел\"")
+            parts.append("    adjacency_list = {}")
+            parts.append("    for _ in range(num_vertices):")
+            parts.append("        parts = input().split(':')")
+            parts.append("        key = int(parts[0])")
+            parts.append("        neighbors = list(map(int, parts[1].strip().split()))")
+            parts.append("        adjacency_list[key] = neighbors")
+
+        if self.start_point_checkbox.isChecked():
+            parts.append("    start = int(input())  # начальная вершина")
+
+        if self.end_point_checkbox.isChecked():
+            parts.append("    end = int(input())  # конечная вершина")
+
+        body = "\n".join(parts) if parts else "    pass  # нет параметров"
+        template = f"""def run_algorithm():\n{body}\n\n    # Ваш алгоритм здесь\n\nrun_algorithm()\n"""
+        return template
+
+    def show_template_dialog(self):
+        code = self.generate_template_text()
+        dialog = TemplateDialog(code, self)
+        dialog.exec()
+
 
 class Settings(QtWidgets.QDialog):
     def __init__(self, parent=None):
@@ -194,7 +356,7 @@ class Settings(QtWidgets.QDialog):
         self.setupUi()
 
     def setupUi(self):
-        self.setWindowTitle("Настройкти")
+        self.setWindowTitle("Настройки")
         self.setFixedSize(400, 300)  # Фиксируем размер окна
 
         # Установка стиля
@@ -1245,7 +1407,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         top_container_layout.setContentsMargins(0, 0, 0, 0)
         top_container_layout.setSpacing(0)
 
-        # 1. Фиксированная панель с кнопками (всегда видна)
+        # Фиксированная панель с кнопками (всегда видна)
         fixed_buttons_panel = QtWidgets.QWidget()
         fixed_buttons_panel.setStyleSheet(
             "background-color: white;"  # Оформление фиксированной части
@@ -1279,7 +1441,7 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
         fixed_buttons_layout.addWidget(self.add_algorithm_button)
         fixed_buttons_layout.addWidget(self.remove_algorithm_button)
 
-        # 2. Прокручиваемая область для динамически добавляемых элементов
+        # Прокручиваемая область для динамически добавляемых элементов
         dynamic_container = QtWidgets.QWidget()
         # layout для динамического добавления кнопок и других виджетов
         self.top_side_layout = QtWidgets.QVBoxLayout(dynamic_container)
@@ -1464,9 +1626,20 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                 name = os.path.splitext(os.path.basename(selected_file))[0]
                 self._add_algorithm_button(name, algorithm_data)
 
+    def _delete_algorithm_from_config(self, json_path, algorithm_name):
+        with open(json_path, "r", encoding="utf-8") as f1:
+            data = json.load(f1)
+
+        if algorithm_name in data:
+            del data[algorithm_name]
+            with open(json_path, "w", encoding="utf-8") as f2:
+                json.dump(data, f2, indent=4, ensure_ascii=False)
+            return True
+        return False
+
     def remove_algorithm(self):
         if not os.path.exists(ALGORITHMS_DIR):
-            QtWidgets.QMessageBox.information(self, "Нет алгоритмов", "Папка с алгоритмами пуста.")
+            QtWidgets.QMessageBox.information(self, "Папка с алгоритмами", "Папка с алгоритмами пуста.")
             return
 
         files = [f for f in os.listdir(ALGORITHMS_DIR) if f.endswith('.py')]
@@ -1484,6 +1657,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     if name in self.custom_algorithm_buttons:
                         btn = self.custom_algorithm_buttons.pop(name)[0]
                         self.top_side_layout.removeWidget(btn)
+                        config_path = os.path.join(ALGORITHMS_DIR, "algorithms_configurations")
+                        self._delete_algorithm_from_config(config_path, name)
                         btn.deleteLater()
                 except Exception as e:
                     QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось удалить: {e}")
@@ -1605,6 +1780,8 @@ class Grafs(QtWidgets.QMainWindow):  # Используем QMainWindow
                     data += f"{' '.join(temp_str)}\n"
             else:
                 input_data, vertex_to_index, index_to_vertex = self._create_adjecency_list(self.graph_area.points)
+                for i in input_data.keys():
+                    data += f"{i}: {input_data[i]}"
 
             if algorithm_data["start_point"]:
                 self.choise_start()
