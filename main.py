@@ -10,6 +10,14 @@ from screeninfo import get_monitors
 from PyQt6 import QtWidgets, QtGui, QtCore
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem
 
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 # Папка, где будут храниться алгоритмы
 ALGORITHMS_DIR = "algorithms"
 
@@ -380,7 +388,7 @@ class About_program(QtWidgets.QDialog):
     def load_description(self):
         """Функция для отображения текста"""
         try:
-            with open("About_program.txt", "r", encoding="utf-8") as file:
+            with open(resource_path("About_program.txt"), "r", encoding="utf-8") as file:
                 description = file.read()
                 self.text_edit.setPlainText(description)
         except FileNotFoundError:
@@ -1175,7 +1183,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.setSpacing(0)
 
         # Кнопка рисования кругов
-        self.paint_ellipse_button = SvgButton("svg_folder/circle-solid.svg")
+        self.paint_ellipse_button = SvgButton(resource_path("svg_folder/circle-solid.svg"))
         self.paint_ellipse_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_ellipse_button.setCheckable(True)
         self.paint_ellipse_button.clicked.connect(self.switch_paint_ellipse_mode)
@@ -1183,7 +1191,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.paint_ellipse_button)
 
         # Кнопка рисования линий
-        self.paint_line_button = SvgButton("svg_folder/line.svg")
+        self.paint_line_button = SvgButton(resource_path("svg_folder/line.svg"))
         self.paint_line_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_line_button.setCheckable(True)
         self.paint_line_button.clicked.connect(self.switch_paint_line_mode)
@@ -1191,7 +1199,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.paint_line_button)
 
         # Кнопка удаления (корзинка)
-        self.erase_button = SvgButton("svg_folder/trash-alt-solid.svg")
+        self.erase_button = SvgButton(resource_path("svg_folder/trash-alt-solid.svg"))
         self.erase_button.setFixedWidth(int(monitor_width * 0.03))
         self.erase_button.setCheckable(True)
         self.erase_button.clicked.connect(self.switch_erase_mode)
@@ -1199,7 +1207,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.erase_button)
 
         # Выбор пользовательского цвета
-        self.custom_color_button = SvgButton("svg_folder/palette-solid.svg")
+        self.custom_color_button = SvgButton(resource_path("svg_folder/palette-solid.svg"))
         self.custom_color_button.setFixedWidth(int(monitor_width * 0.03))
         self.custom_color_button.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.custom_color_button)
@@ -1748,7 +1756,7 @@ class Grafs(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    app.setWindowIcon(QtGui.QIcon('icon.ico'))
+    app.setWindowIcon(QtGui.QIcon(resource_path('icon.ico')))
     wnd = Grafs()
     wnd.show()
     sys.exit(app.exec())
