@@ -1575,9 +1575,13 @@ class Grafs(QtWidgets.QMainWindow):
                 alg_end = self.graph_area.start_point
                 data += f"{vertex_to_index[alg_end]}\n"
 
+            python_exe = shutil.which("python")
+            if python_exe is None:
+                raise RuntimeError("Не найден исполняемый файл python в PATH")
+
             # Запускаем алгоритм, передавая данные через stdin и захватываем stdout
             process = subprocess.Popen(
-                ['python', f'algorithms/{text}.py'],
+                [python_exe, f'algorithms/{text}.py'],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
