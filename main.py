@@ -1175,7 +1175,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.setSpacing(0)
 
         # Кнопка рисования кругов
-        self.paint_ellipse_button = SvgButton("circle-solid.svg")
+        self.paint_ellipse_button = SvgButton("svg_folder/circle-solid.svg")
         self.paint_ellipse_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_ellipse_button.setCheckable(True)
         self.paint_ellipse_button.clicked.connect(self.switch_paint_ellipse_mode)
@@ -1183,7 +1183,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.paint_ellipse_button)
 
         # Кнопка рисования линий
-        self.paint_line_button = SvgButton("line.svg")
+        self.paint_line_button = SvgButton("svg_folder/line.svg")
         self.paint_line_button.setFixedWidth(int(monitor_width * 0.03))
         self.paint_line_button.setCheckable(True)
         self.paint_line_button.clicked.connect(self.switch_paint_line_mode)
@@ -1191,7 +1191,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.paint_line_button)
 
         # Кнопка удаления (корзинка)
-        self.erase_button = SvgButton("trash-alt-solid.svg")
+        self.erase_button = SvgButton("svg_folder/trash-alt-solid.svg")
         self.erase_button.setFixedWidth(int(monitor_width * 0.03))
         self.erase_button.setCheckable(True)
         self.erase_button.clicked.connect(self.switch_erase_mode)
@@ -1199,7 +1199,7 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.addWidget(self.erase_button)
 
         # Выбор пользовательского цвета
-        self.custom_color_button = SvgButton("palette-solid.svg")
+        self.custom_color_button = SvgButton("svg_folder/palette-solid.svg")
         self.custom_color_button.setFixedWidth(int(monitor_width * 0.03))
         self.custom_color_button.clicked.connect(self.choose_custom_color)
         self.tool_panel_layout.addWidget(self.custom_color_button)
