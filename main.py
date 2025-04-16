@@ -4,21 +4,16 @@ import subprocess
 import json
 
 import shutil
-import importlib.util
-
-from collections import deque
 
 from screeninfo import get_monitors
-import \
-    heapq  # Кучи — это двоичные деревья, в которых каждый родительский узел имеет значение, меньшее или равное значению любого из его дочерних узлов. Мы называем это условие инвариантом кучи.
 
 from PyQt6 import QtWidgets, QtGui, QtCore
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsTextItem, \
-    QGraphicsItem
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QGraphicsLineItem
 
 # Папка, где будут храниться алгоритмы
 ALGORITHMS_DIR = "algorithms"
 
+# Получаем размеры монитора для создания относительного размера приложения
 for monitor in get_monitors():
     monitor_width = int(monitor.width)
     monitor_height = int(monitor.height)
@@ -36,34 +31,7 @@ def hex_to_QColor(hex_color):
     return QtGui.QColor(r, g, b)
 
 
-class CodeDialog(QtWidgets.QDialog):
-    def __init__(self, code):
-        super().__init__()
-        self.setWindowTitle("Ваш код")
-        layout = QtWidgets.QVBoxLayout()
-
-        layout.addWidget(QtWidgets.QLabel("Скопируйте код:"))
-
-        self.code_edit = QtWidgets.QLineEdit()
-        self.code_edit.setText(code)
-        self.code_edit.setReadOnly(True)
-        layout.addWidget(self.code_edit)
-
-        copy_button = QtWidgets.QPushButton("Скопировать")
-        copy_button.clicked.connect(self.copy_code)
-        layout.addWidget(copy_button)
-
-        ok_button = QtWidgets.QPushButton("ОК")
-        ok_button.clicked.connect(self.accept)
-        layout.addWidget(ok_button)
-
-        self.setLayout(layout)
-
-    def copy_code(self):
-        clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.setText(self.code_edit.text())
-
-
+# Диалог согласия/отказа
 class ConfirmationDialog(QtWidgets.QDialog):
     def __init__(self, reason, parent=None):
         super().__init__(parent)
@@ -73,7 +41,7 @@ class ConfirmationDialog(QtWidgets.QDialog):
 
     def setupUi(self):
         self.setWindowTitle(f"Are you sure {self.reason}?")
-        self.setFixedSize(400, 200)  # Фиксируем размер окна
+        self.setFixedSize(400, 200)
 
         label_text = f"Are you sure {self.reason}?"
         self.label = QtWidgets.QLabel(label_text, self)
@@ -81,7 +49,6 @@ class ConfirmationDialog(QtWidgets.QDialog):
         self.yes_button = QtWidgets.QPushButton("YES", self)
         self.no_button = QtWidgets.QPushButton("NO", self)
 
-        # Размещаем элементы управления с помощью менеджеров компоновки
         vbox_layout = QtWidgets.QVBoxLayout()
         hbox_layout = QtWidgets.QHBoxLayout()
 
@@ -94,17 +61,17 @@ class ConfirmationDialog(QtWidgets.QDialog):
         vbox_layout.addLayout(hbox_layout)
         self.setLayout(vbox_layout)
 
-        # Подключаем обработчики событий
         self.yes_button.clicked.connect(self._yes)
         self.no_button.clicked.connect(self._no)
 
     def _yes(self):
-        self.accept()  # Закрывает диалог и возвращает результат
+        self.accept()  # Закрывает диалог и возвращает результат "принято"
 
     def _no(self):
-        self.reject()  # Закрывает диалог и возвращает результат
+        self.reject()  # Закрывает диалог и возвращает результат "отказано"
 
 
+# Класс для отображения шаблона
 class TemplateDialog(QtWidgets.QDialog):
     def __init__(self, code_text, parent=None):
         super().__init__(parent)
@@ -144,14 +111,13 @@ class TemplateDialog(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout(self)
 
-        # Добавляем поле для кода
+        # Поле для кода
         self.text_edit = QtWidgets.QPlainTextEdit(self)
         self.text_edit.setPlainText(code_text)
         self.text_edit.setReadOnly(True)
 
         layout.addWidget(self.text_edit)
 
-        # Кнопки
         copy_button = QtWidgets.QPushButton("Скопировать", self)
         save_button = QtWidgets.QPushButton("Сохранить", self)
 
@@ -161,7 +127,6 @@ class TemplateDialog(QtWidgets.QDialog):
 
         layout.addLayout(buttons_layout)
 
-        # Обработчики кнопок
         copy_button.clicked.connect(self.copy_to_clipboard)
         save_button.clicked.connect(self.save_to_file)
 
@@ -177,6 +142,7 @@ class TemplateDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.information(self, "Сохранено", f"Шаблон сохранён в:\n{path}")
 
 
+# Диалог для добавления алгоритмов
 class AddAlgorithmDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -220,14 +186,11 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
 
         self.config_data = None
 
-        # Создаем элементы формы
         self.vertices_checkbox = QtWidgets.QCheckBox("Передать количество вершин", self)
 
-        # Радио-кнопки для выбора типа графа (матрица или список смежности)
         self.adjacency_matrix_radio = QtWidgets.QRadioButton("Передать матрицу смежности", self)
         self.adjacency_list_radio = QtWidgets.QRadioButton("Передать список смежности (словарь)", self)
 
-        # Устанавливаем группу для радио кнопок
         self.adjacency_group = QtWidgets.QButtonGroup(self)
         self.adjacency_group.addButton(self.adjacency_matrix_radio)
         self.adjacency_group.addButton(self.adjacency_list_radio)
@@ -243,7 +206,6 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
 
         self.create_template_button = QtWidgets.QPushButton("Создать шаблон", self)
 
-        # Размещение элементов
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.vertices_checkbox)
         layout.addWidget(self.adjacency_matrix_radio)
@@ -257,7 +219,6 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
         buttons_layout.addWidget(self.add_button)
         layout.addLayout(buttons_layout)
 
-        # Обработчики
         self.add_button.clicked.connect(self.add_algorithm)
         self.cancel_button.clicked.connect(self.reject)
         self.create_template_button.clicked.connect(self.show_template_dialog)
@@ -275,7 +236,7 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
             self.vertices_checkbox.setEnabled(True)
 
     def add_algorithm(self):
-        # Проверка, что выбран один из типов графа
+        # Проверка, что выбран один из типов графа на всякий случай
         if not self.adjacency_matrix_radio.isChecked() and not self.adjacency_list_radio.isChecked():
             QtWidgets.QMessageBox.warning(self, "Ошибка",
                                           "Пожалуйста, выберите тип графа (матрица или список смежности).")
@@ -302,10 +263,9 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
                 "adjacency_type": "matrix" if self.adjacency_matrix_radio.isChecked() else "list",
                 "start_point": self.start_point_checkbox.isChecked(),
                 "end_point": self.end_point_checkbox.isChecked(),
-                "file": destination  # Add the file path to the config data
+                "file": destination
             }
 
-            # Возвращаем данные об алгоритме
             self.accept()
             return
 
@@ -350,6 +310,7 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
         dialog.exec()
 
 
+# Класс настроек
 class Settings(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -367,9 +328,8 @@ class Settings(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout(self)
 
-        # Чекбокс для отображения взвешенного графа
         self.checkbox_weighted = QtWidgets.QCheckBox("Взвешенный граф", self)
-        self.checkbox_weighted.setChecked(False)  # Изначально не выбран
+        self.checkbox_weighted.setChecked(False)
         self.checkbox_weighted.setStyleSheet("""
                    font-size: 14px;
                    color: #333333;
@@ -389,39 +349,36 @@ class Settings(QtWidgets.QDialog):
             wnd.graph_area.toggle_weighted_graph()
 
 
-# Ставим QDialog чтобы было модальное окно, оно делает невозможность взаимодействия с другими окнами пока пользователь не зароет это
+# Ставим QDialog чтобы было модальное окно, оно делает невозможно взаимодействие с другими окнами пока пользователь не зароет это
 class About_program(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setModal(True)  # Устанавливаем модальность окна
+        self.setModal(True)  # Устанавливаем модальность окна в ручную (необязательно)
         self.setupUi()
 
     def setupUi(self):
         self.setWindowTitle("О программе")
-        self.setFixedSize(400, 300)  # Фиксируем размер окна
+        self.setFixedSize(400, 300)
 
-        # Установка стиля
         self.setStyleSheet("background-color: white;")
 
-        # Создание layout для размещения элементов
         layout = QtWidgets.QVBoxLayout()
 
         # Создание QTextEdit для отображения текста
         self.text_edit = QtWidgets.QTextEdit()
-        self.text_edit.setReadOnly(True)  # Делаем текстовое поле только для чтения
+        self.text_edit.setReadOnly(True)
         self.load_description()  # Загружаем текст из файла
 
-        # Кнопка закрытия
         close_button = QtWidgets.QPushButton("Закрыть")
-        close_button.clicked.connect(self.close)  # Закрываем окно при нажатии
+        close_button.clicked.connect(self.close)
 
-        # Добавление элементов в layout
         layout.addWidget(self.text_edit)
         layout.addWidget(close_button)
 
         self.setLayout(layout)
 
-    def load_description(self):  # функция для отображения текста
+    def load_description(self):
+        """Функция для отображения текста"""
         try:
             with open("About_program.txt", "r", encoding="utf-8") as file:
                 description = file.read()
@@ -432,6 +389,7 @@ class About_program(QtWidgets.QDialog):
             self.text_edit.setPlainText(f"Ошибка при загрузке описания: {str(e)}")
 
 
+# Переписанный QGraphicsScene для правильного выбора вершины при наложении
 class CustomGraphicsScene(QGraphicsScene):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -455,144 +413,7 @@ class CustomGraphicsScene(QGraphicsScene):
         super().mousePressEvent(event)
 
 
-# class Algorithms:
-#     def __init__(self, parent=None, orientation=False, weighted=False):
-#         self.parent = parent
-#         self.orientation = orientation
-#         self.weighted = weighted
-#
-#     def BFS(self, graph, start_vertex, index_to_vertex):
-#         # Создаем очередь для хранения вершин, которые нужно посетить
-#         queue = deque()
-#         queue.append(start_vertex)
-#
-#         # Массив для отслеживания посещенных вершин
-#         visited = [False] * len(graph)
-#         visited[start_vertex] = True
-#
-#         while queue:
-#             current_vertex = queue.popleft()
-#
-#             self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[current_vertex].label.toPlainText()}", "\n")
-#
-#             for i in range(len(graph[current_vertex])):
-#                 if not visited[i] and graph[current_vertex][i]:
-#                     visited[i] = True
-#                     queue.append(i)
-#
-#     def DFS(self, graph, start_vertex, index_to_vertex):
-#         """Обход графа в глубину (DFS)."""
-#
-#         def dfs_recursive(vertex, visited):
-#             visited[vertex] = True
-#             self.parent.add_hints_text(f"Визит в вершину {index_to_vertex[vertex].label.toPlainText()}", "\n")
-#
-#             for i in range(len(graph[vertex])):
-#                 if not visited[i] and graph[vertex][i]:
-#                     dfs_recursive(i, visited)
-#
-#         visited = [False] * len(graph)
-#         dfs_recursive(start_vertex, visited)
-#
-#     def Dijkstra(self, graph, start, index_to_vertex):
-#         n = len(graph)
-#         dist = [float('inf')] * n  # Массив расстояний
-#         prev = [None] * n  # Массив предков для восстановления пути
-#         dist[start] = 0  # Расстояние до стартовой вершины = 0
-#         pq = [(0, start)]  # Очередь с приоритетом
-#
-#         while pq:
-#             d, v = heapq.heappop(pq)  # Извлекаем вершину с минимальным расстоянием
-#             if d > dist[v]:
-#                 continue
-#             for u, weight in enumerate(graph[v]):
-#                 # Если существует ребро (вес больше 0) и найден более короткий путь
-#                 if weight > 0 and dist[v] + weight < dist[u]:
-#                     dist[u] = dist[v] + weight
-#                     prev[u] = v  # Запоминаем предка
-#                     heapq.heappush(pq, (dist[u], u))
-#
-#         # Выводим кратчайшие пути от начальной вершины до всех остальных
-#         for vertex in range(n):
-#             if start != vertex:
-#                 if dist[vertex] == float('inf'):
-#                     self.parent.add_hints_text(f"Нет пути от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}\n", "\n")
-#                 else:
-#                     path = []
-#                     current = vertex
-#                     while current is not None:
-#                         path.append(current + 1)  # Составляем путь (индексация с 1)
-#                         current = prev[current]
-#                     path.reverse()  # Переворачиваем путь, чтобы он был от старта к цели
-#                     self.parent.add_hints_text(
-#                         f"Кратчайший путь от {index_to_vertex[start].label.toPlainText()} до {index_to_vertex[vertex].label.toPlainText()}: {' -> '.join(map(str, path))}, длина: {dist[vertex]}\n", "\n"
-#                     )
-#
-#     def FloydWarshall(self, graph):
-#         n = len(graph)
-#         dist = [[float('inf')] * n for _ in range(n)]
-#         for i in range(n):
-#             for j in range(n):
-#                 if i == j:
-#                     dist[i][j] = 0
-#                 elif graph[i][j]:
-#                     dist[i][j] = graph[i][j]
-#         for k in range(n):
-#             for i in range(n):
-#                 for j in range(n):
-#                     dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-#         self.parent.add_hints_text(f"Матрица кратчайших путей: {dist}", "\n")
-#
-#     def Kruskal(self, edges, n):
-#         edges.sort(key=lambda x: x[2])
-#         parent = list(range(n))
-#
-#         def find(v):
-#             if parent[v] != v:
-#                 parent[v] = find(parent[v])
-#             return parent[v]
-#
-#         mst = []
-#         for u, v, weight in edges:
-#             ru, rv = find(u), find(v)
-#             if ru != rv:
-#                 mst.append((u, v, weight))
-#                 parent[ru] = rv
-#         self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
-#
-#     def Prim(self, graph):
-#         n = len(graph)
-#         in_mst = [False] * n
-#         min_edge = [(float('inf'), -1)] * n
-#         min_edge[0] = (0, -1)
-#         mst = []
-#         for _ in range(n):
-#             v = min((w, v) for v, (w, _) in enumerate(min_edge) if not in_mst[v])[1]
-#             in_mst[v] = True
-#             if min_edge[v][1] != -1:
-#                 mst.append((min_edge[v][1], v, min_edge[v][0]))
-#             for u, weight in enumerate(graph[v]):
-#                 if weight and not in_mst[u] and weight < min_edge[u][0]:
-#                     min_edge[u] = (weight, v)
-#         self.parent.add_hints_text(f"Минимальное остовное дерево: {mst}", "\n")
-#
-#     def Levitan(self, graph, start):
-#         n = len(graph)
-#         dist = [float('inf')] * n
-#         dist[start] = 0
-#         queue = deque([start])
-#         while queue:
-#             v = queue.popleft()
-#             for u, weight in enumerate(graph[v]):
-#                 if weight and dist[u] > dist[v] + weight:
-#                     dist[u] = dist[v] + weight
-#                     if weight == 1:
-#                         queue.appendleft(u)
-#                     else:
-#                         queue.append(u)
-#         self.parent.add_hints_text(f"Кратчайшие пути (Левитан): {dist}", "\n")
-
-
+# Класс сортированного списка точек
 class SortedPointDict:
     def __init__(self):
         self.data = {}  # Основной словарь {точка: [[связанная точка, рёро которым связано], ...] ...}
@@ -655,6 +476,7 @@ class SortedPointDict:
         return f"{[(point.label.toPlainText(), [(p.label.toPlainText(), (ed.start_v.label.toPlainText(), ed.end_v.label.toPlainText())) for p, ed in connected_points]) for point, connected_points in self.items()]}"
 
 
+# Собственный класс SignalEmitter для обработки некоторых событий
 class SignalEmitter(QtCore.QObject):
     """Класс для работы с сигналами."""
     positionChanged = QtCore.pyqtSignal()  # Сигнал для изменения позиции
@@ -663,6 +485,7 @@ class SignalEmitter(QtCore.QObject):
         super().__init__(parent)
 
 
+# Класс "вершин"
 class LabeledEllipse(QGraphicsEllipseItem):
     def __init__(self, x, y, size, color, label, parent=None):
         super().__init__(-size / 2, -size / 2, size, size, parent)  # Инициализируем QGraphicsEllipseItem
@@ -674,16 +497,15 @@ class LabeledEllipse(QGraphicsEllipseItem):
         # Добавляем объект для сигналов
         self.signals = SignalEmitter()
 
-        # Настройка внешнего вида вершины
         self.setBrush(QtGui.QBrush(color))
         self.setPen(QtGui.QPen(QtGui.QColor("#000000"), 0))  # Убираем обводку
 
         # Создаём метку с номером
         self.label = QtWidgets.QGraphicsTextItem(str(label), self)
         self.label.setDefaultTextColor(QtGui.QColor("#000000"))  # Устанавливаем цвет по умолчанию
-        self.update_text_font(size)  # Настраиваем размер текста
-        self.update_text_position(size)  # Центрируем текст
-        self.update_text_color()  # Обновляем цвет текста в зависимости от цвета вершины
+        self.update_text_font(size)
+        self.update_text_position(size)
+        self.update_text_color()
 
         self.label.setZValue(1000)
 
@@ -697,15 +519,12 @@ class LabeledEllipse(QGraphicsEllipseItem):
         """Контекстное меню для вершины."""
         menu = QtWidgets.QMenu()
 
-        # Действие для изменения цвета вершины
         change_color_action = menu.addAction("Изменить цвет")
         change_color_action.triggered.connect(self.change_color)
 
-        # Действие для изменения размера вершины
         change_size_action = menu.addAction("Изменить размер")
         change_size_action.triggered.connect(self.change_size)
 
-        # Показать меню
         menu.exec(pos)
 
     def change_color(self):
@@ -746,8 +565,8 @@ class LabeledEllipse(QGraphicsEllipseItem):
     def set_label(self, label):
         """Изменить номер (метку)"""
         self.label.setPlainText(str(label))
-        self.update_text_position(self.rect().width())  # Перерасчёт позиции текста
-        self.update_text_color()  # Перепроверка цвета текста
+        self.update_text_position(self.rect().width())
+        self.update_text_color()
 
     def update_text_font(self, size):
         """Обновляем размер шрифта текста в зависимости от размера вершины и длины текста."""
@@ -776,9 +595,8 @@ class LabeledEllipse(QGraphicsEllipseItem):
         self.update_text_position(size)
 
 
+# Класс "рёбер"
 class GraphEdge(QGraphicsLineItem):
-    """Класс для рёбер графа"""
-
     def __init__(self, start, end, color, weight=1, parent=None):
         super().__init__(parent)
         self.start_v = start
@@ -800,7 +618,7 @@ class GraphEdge(QGraphicsLineItem):
         font = QtGui.QFont("Monospace", 10)
         self.label.setFont(font)
 
-        # Выравниваем текст по центру
+        # Выравниваем текст по центру, делаем его поворот относительно центра
         self.label.setTransformOriginPoint(self.label.boundingRect().center())
 
         self.update_position()
@@ -821,15 +639,12 @@ class GraphEdge(QGraphicsLineItem):
         """Контекстное меню для ребра."""
         menu = QtWidgets.QMenu()
 
-        # Действие для изменения цвета ребра
         change_color_action = menu.addAction("Изменить цвет")
         change_color_action.triggered.connect(self.change_color)
 
-        # Действие для изменения веса ребра
         change_weight_action = menu.addAction("Изменить вес")
         change_weight_action.triggered.connect(self.change_weight)
 
-        # Показать меню
         menu.exec(pos)
 
     def change_color(self):
@@ -861,7 +676,7 @@ class GraphEdge(QGraphicsLineItem):
         # Определяем главное направление линии
         is_horizontal = abs(direction.x()) > abs(direction.y())
 
-        # Корректируем угол для читаемости
+        # Корректируем угол для читаемости (верхногами)
         if direction.x() < 0:
             angle += 180 if is_horizontal else 0
         if direction.y() > 0 and not is_horizontal:
@@ -874,7 +689,6 @@ class GraphEdge(QGraphicsLineItem):
         if 90 < angle < 270:
             angle = (angle + 180) % 360  # Переворачиваем на 180 градусов
 
-        # Применяем поворот
         self.label.setRotation(-angle)
 
         # Рассчитываем смещение относительно нормали
@@ -909,7 +723,7 @@ class GraphEdge(QGraphicsLineItem):
             if self.start_v == pt:
                 ed.weight = weight
         self.label.setPlainText(str(weight))
-        self.update_position()  # Обновляем позицию после изменения текста
+        self.update_position()
         self.update_weight_display()
 
 
@@ -930,7 +744,7 @@ class GraphArea(QGraphicsView):
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        # Параметры для точек (вершин графа)
+        # Начальные параметры для точек (вершин графа)
         self.point_size = 10
         self.point_color = QtGui.QColor("#000000")
 
@@ -944,13 +758,6 @@ class GraphArea(QGraphicsView):
         # Стандартное увеличени
         self.scale(2, 2)
 
-        # # СПРОСИТЬ КАК ОТРИСОВЫВАТЬ СЕТКУ
-        # # Параметры сетки
-        # self.grid_enabled = True  # Флаг для включения сетки
-        # self.grid_size = 5  # Размер одной ячейки сетки
-        # self.grid_color = QtGui.QColor(200, 200, 200, 125)  # Цвет сетки (с четвёртым паказателем для прозрачности)
-        # self.draw_grid()
-
         self.weighted_graph = False
 
         # Режимы взаимодействия
@@ -961,9 +768,6 @@ class GraphArea(QGraphicsView):
         self.choise_mode = False
         self.tools_mode = False
 
-    # def draw_grid(self):
-    #     pass
-
     def toggle_weighted_graph(self):
         """Переключить отображение веса рёбер"""
         for item in self.scene.items():
@@ -973,9 +777,9 @@ class GraphArea(QGraphicsView):
     def wheelEvent(self, event):
         """Обработка колесика мыши для масштабирования сцены."""
         if event.angleDelta().y() > 0:
-            self.scale(self.scale_factor, self.scale_factor)  # Увеличение
+            self.scale(self.scale_factor, self.scale_factor)  # +размер
         else:
-            self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # Уменьшение
+            self.scale(1 / self.scale_factor, 1 / self.scale_factor)  # -размер
 
     def contextMenuEvent(self, event):
         """Handle context menu events in the graph area."""
@@ -992,7 +796,7 @@ class GraphArea(QGraphicsView):
                 if isinstance(item, QGraphicsLineItem):
                     line = item.line()
                     dist = self._distance_from_point_to_line(pos, line)
-                    if dist <= threshold:  # Проверяем расстояние
+                    if dist <= threshold:
                         activ_item = item
 
         if activ_item is not None:
@@ -1059,15 +863,13 @@ class GraphArea(QGraphicsView):
                 self.select_point(pos)
 
             elif self.paint_ellipse_mode:
-                # Добавление новой точки
                 self.add_point(pos)
 
             elif self.delete_mode:
-                # Удаление точки при нажатии
                 self.delete_obj(pos)
 
             elif self.move_mode and not (event.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier):
-                # Логика перемещения (можно доработать)
+                # Логика перемещения
                 self.select_point(pos)
 
             if fl:
@@ -1124,16 +926,15 @@ class GraphArea(QGraphicsView):
         # Получаем центр нового элипса в координатах сцены
         new_center = new_ellipse.mapToScene(new_ellipse.rect().center())
 
-        # Проходим по всем объектам на сцене
         for item in self.points.sorted_keys:
             # Получаем центр существующего элипса в координатах сцены
             existing_center = item.mapToScene(item.rect().center())
 
             # Вычисляем расстояние между центрами
             distance = (
-                    new_center - existing_center).manhattanLength()  # создаёт вектор разности между центрами и возвращает сумму абсолютных разностей по осям, или же Манхэттенское расстояние (|х2 - х1|+|у2-у1|).
+                    new_center - existing_center).manhattanLength()  # создаёт вектор разности между центрами и возвращает сумму абсолютных разностей по осям, или же Манхэттенское расстояние (|х2 - х1|+|у2-у1|)
 
-            # Проверка, что расстояние больше суммы радиусов и минимального расстояния
+            # Проверка что расстояние больше суммы радиусов и минимального расстояния
             if distance < (new_ellipse.rect().width() / 2 + item.rect().width() / 2 + 3):
                 return False
 
@@ -1300,12 +1101,14 @@ class GraphArea(QGraphicsView):
         self.points.clear()
 
 
+# Класс кнопки с svg-картинкой
 class SvgButton(QtWidgets.QPushButton):
     def __init__(self, icon_path):
         super().__init__()
         self.setIcon(QtGui.QIcon(icon_path))
 
 
+# Основной класс приложения
 class Grafs(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1313,7 +1116,6 @@ class Grafs(QtWidgets.QMainWindow):
         self.resize(int(monitor_width * 0.6), int(monitor_height * 0.6))
         self.color = "#000000"
         self.graph_area = None
-        # self.alg = Algorithms(self)
         self.wnd_about = None
         self.wnd_settings = Settings(self)
 
@@ -1372,14 +1174,6 @@ class Grafs(QtWidgets.QMainWindow):
         self.tool_panel_layout.setContentsMargins(5, 0, 5, 0)
         self.tool_panel_layout.setSpacing(0)
 
-        # Кнопка "Инструменты"
-        # self.tools_button = SvgButton("tools-solid.svg")
-        # self.tools_button.setFixedWidth(int(monitor_width * 0.03))
-        # self.tools_button.setCheckable(True)
-        # self.tools_button.clicked.connect(self.swith_tools_mode)
-        # self.tools_button.clicked.connect(self.switch_move_mode)
-        # self.tool_panel_layout.addWidget(self.tools_button)
-
         # Кнопка рисования кругов
         self.paint_ellipse_button = SvgButton("circle-solid.svg")
         self.paint_ellipse_button.setFixedWidth(int(monitor_width * 0.03))
@@ -1425,12 +1219,6 @@ class Grafs(QtWidgets.QMainWindow):
         self.size_slider.valueChanged.connect(self.change_size)
         self.tool_panel_layout.addWidget(self.size_slider)
 
-        # # Кнопка вызова редактора
-        # self.call_editor_button = SvgButton("border-all-solid.svg")
-        # self.call_editor_button.setFixedWidth(int(monitor_width * 0.03))
-        # self.call_editor_button.clicked.connect(self.choose_background)
-        # self.tool_panel_layout.addWidget(self.call_editor_button)
-
         # Добавляем панель инструментов в layout
         vertical_layout.addWidget(self.tool_panel)
 
@@ -1454,21 +1242,18 @@ class Grafs(QtWidgets.QMainWindow):
         # Фиксированная панель с кнопками (всегда видна)
         fixed_buttons_panel = QtWidgets.QWidget()
         fixed_buttons_panel.setStyleSheet(
-            "background-color: white;"  # Оформление фиксированной части
+            "background-color: white;"
         )
         fixed_buttons_layout = QtWidgets.QHBoxLayout(fixed_buttons_panel)
         fixed_buttons_layout.setContentsMargins(5, 5, 5, 5)
         fixed_buttons_layout.setSpacing(10)
 
-        # Создаем кнопки "Добавить алгоритм" и "Удалить алгоритм"
         self.add_algorithm_button = QtWidgets.QPushButton("➕ Добавить")
         self.remove_algorithm_button = QtWidgets.QPushButton("🗑 Удалить")
 
-        # Привязываем слоты к кнопкам
         self.add_algorithm_button.clicked.connect(self.add_algorithm)
         self.remove_algorithm_button.clicked.connect(self.remove_algorithm)
 
-        # Применим стиль к кнопкам
         buttons_style = (
             "QPushButton {"
             f"background-color: #EAEAEA; border: 1px solid #DCDCDC; border-radius: {self.side_panel_size * 0.05}px;"
@@ -1481,11 +1266,9 @@ class Grafs(QtWidgets.QMainWindow):
         self.add_algorithm_button.setStyleSheet(buttons_style)
         self.remove_algorithm_button.setStyleSheet(buttons_style)
 
-        # Добавляем кнопки в фиксированный layout
         fixed_buttons_layout.addWidget(self.add_algorithm_button)
         fixed_buttons_layout.addWidget(self.remove_algorithm_button)
 
-        # Прокручиваемая область для динамически добавляемых элементов
         dynamic_container = QtWidgets.QWidget()
         # layout для динамического добавления кнопок и других виджетов
         self.top_side_layout = QtWidgets.QVBoxLayout(dynamic_container)
@@ -1499,7 +1282,6 @@ class Grafs(QtWidgets.QMainWindow):
         scroll_area.setStyleSheet("background-color: white; border: none;")
         scroll_area.setStyleSheet(buttons_style)
 
-        # Добавляем фиксированную панель с кнопками и прокручиваемую область в верхний контейнер
         top_container_layout.addWidget(fixed_buttons_panel)
         top_container_layout.addWidget(scroll_area)
 
@@ -1651,19 +1433,6 @@ class Grafs(QtWidgets.QMainWindow):
         if dialog.exec():
             algorithm_data = dialog.config_data
 
-            # datat = "# Шаблон для ввода(шапка)"
-            # if algorithm_data["vertices"]:
-            #     datat += f"n = int(input()) # кол-во вершин\n"
-            # if algorithm_data["adjacency_type"] == "matrix":
-            #     pass
-            # else:
-            #     pass
-            # if algorithm_data["start_point"]:
-            #     datat += f"start_point = input()\n"
-            # if algorithm_data["end_point"]:
-            #     datat += f"end_point = input()\n"
-            # dialog2 = CodeDialog(datat)
-
             selected_file = algorithm_data["file"]
 
             if algorithm_data:
@@ -1771,42 +1540,6 @@ class Grafs(QtWidgets.QMainWindow):
         text = sender_but.text()
         sender_but.repaint()
         if len(self.graph_area.points):
-            # if text == "Обход графа в ширину":
-            #     try:
-            #         self.choise_start()
-            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-            #         self.alg.BFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-            #     except Exception as e:
-            #         self.set_error_hint(e)
-            # elif text == "Обход графа в глубину":
-            #     try:
-            #         self.choise_start()
-            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-            #         self.alg.DFS(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-            #     except Exception as e:
-            #         self.set_error_hint(e)
-            # elif text == "Алгоритм Дейкстра":
-            #     try:
-            #         self.choise_start()
-            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-            #         self.alg.Dijkstra(input_data, vertex_to_index[self.graph_area.start_point], index_to_vertex)
-            #     except Exception as e:
-            #         self.set_error_hint(e)
-            # elif text == "Флойд-Уоршелл":
-            #     try:
-            #         self.choise_start()
-            #         input_data, vertex_to_index, index_to_vertex = self._create_adjacency_matrix(self.graph_area.points)
-            #         self.alg.FloydWarshall(input_data)
-            #     except Exception as e:
-            #         self.set_error_hint(e)
-            # elif text == "Алгоритм Крускала":
-            #     try:
-            #         self.choise_start()
-            #         self.alg.Kruskal()
-            #     except Exception as e:
-            #         self.set_error_hint(e)
-            # else:
-            #     print("start custom alg")
 
             algorithm_data = self.custom_algorithm_buttons[f"{self.sender().text()}"][1]
 
@@ -1863,9 +1596,8 @@ class Grafs(QtWidgets.QMainWindow):
 
     def new_graf(self):
         """Метод для создания нового графа."""
-        dialog = ConfirmationDialog("you want to clear the graph", self)  # Возможно QMessagebox
+        dialog = ConfirmationDialog("you want to clear the graph", self)
         if dialog.exec():
-            # Очистка текущего графа
             self.graph_area.reset_graph()
 
     def tansform_graph(self, points):
@@ -1997,16 +1729,6 @@ class Grafs(QtWidgets.QMainWindow):
             """
         self.set_hints_text(text)
 
-    # def swith_tools_mode(self): если вернуть, то дополнить остальные
-    #     self.graph_area.tools_mode = True
-    #     self.graph_area.delete_mode = False
-    #     self.graph_area.paint_ellipse_mode = False
-    #     self.graph_area.paint_line_mode = False
-    #     self.graph_area.move_mode = False
-    #     self.paint_ellipse_button.setChecked(False)
-    #     self.paint_line_button.setChecked(False)
-    #     self.tools_button.setChecked(False)
-
     def switch_move_mode(self, missing_text=False):
         if not (
                 self.erase_button.isChecked() or self.paint_ellipse_button.isChecked() or self.paint_line_button.isChecked()):
@@ -2022,11 +1744,6 @@ class Grafs(QtWidgets.QMainWindow):
                         Зажав Ctrl вы сможете выбрать сразу несколько вершин.
                     """
                 self.set_hints_text(text)
-
-    # def choose_background(self):
-    #     """Переключение сетки на графе."""
-    #     self.graph_area.grid_enabled = not self.graph_area.grid_enabled
-    #     self.graph_area.update()
 
 
 if __name__ == '__main__':
