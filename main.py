@@ -341,7 +341,7 @@ class AddAlgorithmDialog(QtWidgets.QDialog):
             parts.append("    end = int(input())  # конечная вершина")
 
         body = "\n".join(parts) if parts else "    pass  # нет параметров"
-        template = f"""def run_algorithm():\n{body}\n\n    # Ваш алгоритм здесь\n\nrun_algorithm()\n"""
+        template = f"""def run_algorithm():\n{body}\n\n    # Для вывода как вершина используйте перед числом знак $\n    # Например $0 - это переведёт номер в вершину приложения\n    # Ваш алгоритм здесь\n\nrun_algorithm()\n"""
         return template
 
     def show_template_dialog(self):
@@ -809,7 +809,6 @@ class GraphEdge(QGraphicsLineItem):
         self.end_v.signals.positionChanged.connect(self.update_position)
 
         self.update_weight_display()
-
 
     def update_weight_display(self):
         """Обновить отображение веса в зависимости от флага weighted_graph"""
@@ -1846,6 +1845,10 @@ class Grafs(QtWidgets.QMainWindow):
 
             # Передаем данные в процесс и получаем вывод
             output, errors = process.communicate(input=data)
+
+            # Замена $индекса на имя вершины
+            for index, vertex in index_to_vertex.items():
+                output = output.replace(f"${index}", vertex.label.toPlainText())
 
             # Выводим результаты
             self.set_hints_text(f"Вывод алгоритма:\n{output}")
