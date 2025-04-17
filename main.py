@@ -1564,7 +1564,7 @@ class Grafs(QtWidgets.QMainWindow):
             else:
                 input_data, vertex_to_index, index_to_vertex = self._create_adjecency_list(self.graph_area.points)
                 for i in input_data.keys():
-                    data += f"{i}: {input_data[i]}"
+                    data += f"{i}: {input_data[i]}\n"
 
             if algorithm_data["start_point"]:
                 self.choise_start()
